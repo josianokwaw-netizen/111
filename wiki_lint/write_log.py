@@ -13,7 +13,7 @@ CLI 用法：
 --op 可选值：摄入 / 查询 / 复检 / 维护 / Schema更新 / 合并 / 删除
 
 模块用法：
-  from wiki_lint.write_log import write_log
+  from write_log import write_log
   write_log(op="复检", title="定时复检", detail="…")
 """
 
@@ -23,7 +23,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 
-from notion_client import Client
+import requests
 
 LOG_DB_ID = "36a8335c5101826296aa816dd77513f6"
 BJ = timezone(timedelta(hours=8))
@@ -53,7 +53,11 @@ def write_log(
     if not token:
         raise RuntimeError("NOTION_TOKEN 未设置")
 
-    notion = Client(auth=token)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
     today = date or datetime.now(BJ).strftime("%Y-%m-%d")
     entry = f"[{op}] {title}"
 
@@ -74,7 +78,13 @@ def write_log(
         if ids:
             props["相关源"] = {"relation": [{"id": i} for i in ids]}
 
-    notion.pages.create(parent={"database_id": LOG_DB_ID}, properties=props)
+    payload = {"parent": {"database_id": LOG_DB_ID}, "properties": props}
+    r = requests.post(
+        "https://api.notion.com/v1/pages",
+        headers=headers,
+        json=payload,
+    )
+    r.raise_for_status()
     print(f"✅ 日志已写入：{entry}  |  {detail[:60]}{'…' if len(detail)>60 else ''}")
 
 

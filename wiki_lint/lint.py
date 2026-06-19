@@ -17,7 +17,8 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from notion_client import Client
+import requests
+
 from write_log import write_log
 
 # ── 配置 ──────────────────────────────────────────────────────────────────
@@ -31,23 +32,36 @@ BJ        = timezone(timedelta(hours=8))
 NOW       = datetime.now(BJ)
 CUTOFF_90 = NOW - timedelta(days=90)
 
-notion = Client(auth=NOTION_TOKEN)
+NOTION_HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json",
+}
 
 
-# ── Notion 工具函数 ────────────────────────────────────────────────────────
+# ── Notion REST API 封装 ──────────────────────────────────────────────────────
 
 def query_all(db_id: str) -> list[dict]:
     pages, cursor = [], None
     while True:
-        r = notion.databases.query(
-            database_id=db_id, start_cursor=cursor, page_size=100
+        payload: dict = {"page_size": 100}
+        if cursor:
+            payload["start_cursor"] = cursor
+        r = requests.post(
+            f"https://api.notion.com/v1/databases/{db_id}/query",
+            headers=NOTION_HEADERS,
+            json=payload,
         )
-        pages.extend(r["results"])
-        if not r.get("has_more"):
+        r.raise_for_status()
+        data = r.json()
+        pages.extend(data["results"])
+        if not data.get("has_more"):
             break
-        cursor = r["next_cursor"]
+        cursor = data["next_cursor"]
     return pages
 
+
+# ── 属性工具函数 ───────────────────────────────────────────────────────────
 
 def _prop(page: dict, field: str) -> dict:
     return page["properties"].get(field, {})
