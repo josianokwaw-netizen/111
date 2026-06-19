@@ -1,0 +1,50 @@
+name: Wiki Lint
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 每天 UTC 01:00（北京时间 09:00）
+  workflow_dispatch:        # 支持手动触发
+
+permissions:
+  issues: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 代码仓库（含 lint 脚本）
+        uses: actions/checkout@v4
+
+      - name: Checkout Wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: pip install -r wiki_lint/requirements.txt
+
+      - name: 运行 lint
+        id: lint
+        run: |
+          set +e
+          python wiki_lint/lint.py wiki/ > /tmp/lint_result.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/lint_result.txt
+
+      - name: 发 Issue（有问题时）
+        if: steps.lint.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(cat /tmp/lint_result.txt)
+          TITLE="🔍 Wiki Lint 报告 · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日')"
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "$TITLE" \
+            --body "$(printf '```\n%s\n```' "$BODY")"
