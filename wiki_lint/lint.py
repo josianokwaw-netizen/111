@@ -18,6 +18,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from notion_client import Client
+from write_log import write_log
 
 # ── 配置 ──────────────────────────────────────────────────────────────────
 
@@ -25,7 +26,6 @@ NOTION_TOKEN   = os.environ["NOTION_TOKEN"]
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 WIKI_DB_ID = "3cb8335c510183e5839681992705faaa"
-LOG_DB_ID  = "36a8335c5101826296aa816dd77513f6"
 
 BJ        = timezone(timedelta(hours=8))
 NOW       = datetime.now(BJ)
@@ -255,23 +255,6 @@ def run_lint() -> tuple[str, int, int]:
     return "\n".join(lines), total_issues, total
 
 
-# ── Notion 日志写入 ──────────────────────────────────────────────────────
-
-def write_log(total_issues: int, page_count: int) -> None:
-    summary = f"扫描 {page_count} 个维基页，发现 {total_issues} 个问题"
-    notion.pages.create(
-        parent={"database_id": LOG_DB_ID},
-        properties={
-            "条目": {
-                "title": [{"text": {"content": f"[Lint] {NOW.strftime('%Y-%m-%d')} 定时复检"}}]
-            },
-            "操作": {"select": {"name": "复检"}},
-            "日期":  {"date": {"start": NOW.strftime("%Y-%m-%d")}},
-            "详情":  {"rich_text": [{"text": {"content": summary}}]},
-        },
-    )
-
-
 # ── 入口 ───────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -279,8 +262,11 @@ def main() -> None:
     print(report)
 
     try:
-        write_log(total_issues, page_count)
-        print("\n✅ 日志已写入 Notion（操作：复检）", file=sys.stderr)
+        write_log(
+            op="复检",
+            title=f"{NOW.strftime('%Y-%m-%d')} 定时复检",
+            detail=f"扫描 {page_count} 个维基页，发现 {total_issues} 个问题",
+        )
     except Exception as e:
         print(f"\n⚠️ Notion 日志写入失败：{e}", file=sys.stderr)
 

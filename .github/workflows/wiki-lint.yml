@@ -30,7 +30,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set +e
-          python wiki_lint/lint.py > /tmp/lint_result.txt 2>&1
+          cd wiki_lint && python lint.py > /tmp/lint_result.txt 2>&1
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/lint_result.txt
 
