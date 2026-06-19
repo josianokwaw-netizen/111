@@ -2,7 +2,7 @@ name: 🌅 Daily AI News Digest
 
 on:
   schedule:
-    - cron: '30 0 * * *'  # 北京时间 08:30 (UTC 00:30)
+    - cron: '30 23 * * *'  # 北京时间 08:30 次日（UTC 前一天 23:30，预留延迟缓冲）
   workflow_dispatch:       # 支持手动触发测试
 
 permissions:
