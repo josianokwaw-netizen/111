@@ -3,9 +3,13 @@
 letta_memory.py — 将 Letta 云端记忆块注入 Claude Code 会话。
 
 用法：
-  python letta/letta_memory.py --read              # 读取所有记忆块并打印（供 SessionStart hook 调用）
+  python letta/letta_memory.py --read              # 读取所有记忆块并打印
   python letta/letta_memory.py --write LABEL VALUE # 更新指定记忆块
+  python letta/letta_memory.py --cache             # 从 Letta 拉取并写入本地缓存文件（本地/CI 运行）
   python letta/letta_memory.py --init              # 首次初始化代理（打印代理 ID）
+
+SessionStart hook 读缓存文件而非直接调 API，避免远程环境网络限制。
+同步流程：本地或 GitHub Action 运行 --cache → commit memory_cache.md → hook 读文件。
 """
 
 import argparse
@@ -15,8 +19,9 @@ import sys
 # ---------------------------------------------------------------------------
 # 常量
 # ---------------------------------------------------------------------------
-AGENT_NAME = "claude-codex-memory"   # Letta 云端代理名称，保持唯一
-API_KEY_ENV = "LETTA_API_KEY"        # 从环境变量读取，避免硬编码敏感信息
+AGENT_NAME  = "claude-codex-memory"                          # Letta 云端代理名称，保持唯一
+API_KEY_ENV = "LETTA_API_KEY"                                # 从环境变量读取，避免硬编码敏感信息
+CACHE_FILE  = os.path.join(os.path.dirname(__file__), "memory_cache.md")  # 本地缓存文件路径
 
 # 首次创建代理时的默认记忆块（之后可通过 --write 随时更新）
 DEFAULT_BLOCKS = [
@@ -107,6 +112,22 @@ def cmd_write(client, agent_id: str, label: str, value: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 写入本地缓存文件（供 GitHub Action / 本地同步使用）
+# ---------------------------------------------------------------------------
+def cmd_cache(client, agent_id: str) -> None:
+    """从 Letta 拉取记忆块并写入 memory_cache.md，之后 hook 直接读文件。"""
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):   # 捕获 cmd_read 的输出
+        cmd_read(client, agent_id)
+    content = buf.getvalue()
+
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ 记忆缓存已写入：{CACHE_FILE}")
+
+
+# ---------------------------------------------------------------------------
 # 初始化命令（打印代理信息）
 # ---------------------------------------------------------------------------
 def cmd_init(client, agent_id: str) -> None:
@@ -118,21 +139,42 @@ def cmd_init(client, agent_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 读取本地缓存（SessionStart hook 在远程环境中调用此函数）
+# ---------------------------------------------------------------------------
+def cmd_read_cache() -> None:
+    """读取本地缓存文件并输出；文件不存在时静默退出。"""
+    if not os.path.exists(CACHE_FILE):
+        print("<!-- Letta Memory: 缓存文件不存在，请先运行 --cache 同步 -->")
+        return
+    with open(CACHE_FILE, encoding="utf-8") as f:
+        print(f.read(), end="")
+
+
+# ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
 def main() -> None:
     parser = argparse.ArgumentParser(description="Letta 记忆块 ↔ Claude Code 集成工具")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--read", action="store_true", help="读取所有记忆块并输出（默认）")
-    group.add_argument("--write", nargs=2, metavar=("LABEL", "VALUE"), help="更新指定记忆块")
-    group.add_argument("--init", action="store_true", help="初始化/确认代理")
+    group.add_argument("--read",       action="store_true", help="从 Letta API 读取记忆块并输出")
+    group.add_argument("--read-cache", action="store_true", help="读取本地缓存文件并输出（远程 hook 使用）")
+    group.add_argument("--write",      nargs=2, metavar=("LABEL", "VALUE"), help="更新指定记忆块")
+    group.add_argument("--cache",      action="store_true", help="从 Letta 拉取并写入本地缓存文件")
+    group.add_argument("--init",       action="store_true", help="初始化/确认代理")
     args = parser.parse_args()
 
-    client = _get_client()
+    # --read-cache 不需要 API 连接，直接读文件
+    if args.read_cache:
+        cmd_read_cache()
+        return
+
+    client   = _get_client()
     agent_id = _find_or_create_agent(client)
 
     if args.write:
         cmd_write(client, agent_id, args.write[0], args.write[1])
+    elif args.cache:
+        cmd_cache(client, agent_id)
     elif args.init:
         cmd_init(client, agent_id)
     else:
