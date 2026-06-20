@@ -1,1 +1,18 @@
-{}
+{
+  "env": {
+    "LETTA_API_KEY": "sk-let-ZGRjNWEzZmYtMjRjNS00ZWNlLThmOTgtNThiMGY3YmRkYzFmOjZmYmE4YjI5LTdkYTgtNDgzYS05OTk1LTk5NWY0NzIwNzhhOA=="
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/111 && pip install -q letta-client 2>/dev/null; python letta/letta_memory.py --read 2>/dev/null || echo '<!-- Letta Memory: 暂不可用 -->'"
+          }
+        ]
+      }
+    ]
+  }
+}
