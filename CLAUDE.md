@@ -87,3 +87,38 @@ GitHub Actions 每周一 09:00 北京时间自动执行 `wiki_lint/lint.py`，
 - `关于 X，Wiki 里怎么说？` → Query 流程 → 好答案考虑回填 → 写日志
 - `给 Wiki 做次体检` → Lint 流程 → 写日志
 - `这个 Scheme 要改一下` → Schema 更新 → 写日志
+
+---
+
+## Letta Memory（长期记忆层）
+
+每次 Claude Code 会话启动时，自动从 Letta 云端读取记忆块，注入到当前上下文。
+
+### 记忆块标签
+
+| 标签 | 说明 |
+|------|------|
+| `human` | 用户画像与偏好（姓名、习惯、工作方式） |
+| `persona` | Claude 在本系统中的角色与行为约束 |
+| 自定义 | 可添加任意标签（如 `wiki_tips`、`project`） |
+
+### 快捷指令
+
+- `更新记忆 LABEL 新内容` → 执行 `python letta/letta_memory.py --write LABEL "新内容"`
+- `查看记忆` → 执行 `python letta/letta_memory.py --read`
+- `初始化 Letta` → 执行 `python letta/letta_memory.py --init`
+
+### CLI 用法
+
+```bash
+# 读取所有记忆块
+python letta/letta_memory.py --read
+
+# 更新某个记忆块
+python letta/letta_memory.py --write human "Name: 小咪，偏好中文，Wiki 维护者"
+
+# 首次初始化（查看代理 ID）
+python letta/letta_memory.py --init
+```
+
+> 代理名称：`claude-codex-memory`，可在 https://app.letta.com 查看与管理。
