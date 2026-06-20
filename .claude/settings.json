@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/user/111 && pip install -q letta-client 2>/dev/null; python letta/letta_memory.py --read 2>/dev/null || echo '<!-- Letta Memory: 暂不可用 -->'"
+            "command": "cd /home/user/111 && python letta/letta_memory.py --read-cache 2>/dev/null || echo '<!-- Letta Memory: 缓存文件不存在 -->'"
           }
         ]
       }
