@@ -13,6 +13,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/111 && pip install letta-client google-generativeai openai -q 2>/dev/null; python letta/post_session_sync.py 2>/dev/null || true"
+          }
+        ]
+      }
     ]
   }
 }
