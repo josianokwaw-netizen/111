@@ -34,7 +34,7 @@ AGENT_NAME     = "claude-codex-memory"
 def get_letta_client():
     try:
         from letta_client import Letta
-        return Letta(token=LETTA_API_KEY)
+        return Letta(api_key=LETTA_API_KEY)
     except ImportError:
         print("[sync] letta-client 未安装，跳过记忆更新", file=sys.stderr)
         return None
@@ -48,14 +48,14 @@ def find_agent(client):
 
 
 def read_memory(client, agent_id) -> dict:
-    agent = client.agents.get(agent_id)
-    return {b.label: b.value for b in agent.memory.blocks}
+    blocks = list(client.agents.blocks.list(agent_id=agent_id))
+    return {b.label: b.value for b in blocks}
 
 
 def write_memory(client, agent_id, label: str, value: str):
-    client.agents.core_memory_replace(
+    client.agents.blocks.update(
+        block_label=label,
         agent_id=agent_id,
-        label=label,
         value=value
     )
 
@@ -155,8 +155,12 @@ def git_push_cache():
             ["git", "-C", str(ROOT), "commit", "-m", f"chore: memory sync {date_str}"],
             check=True
         )
+        branch = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "--abbrev-ref", "HEAD"],
+            text=True
+        ).strip()
         subprocess.run(
-            ["git", "-C", str(ROOT), "push", "-u", "origin", "main"],
+            ["git", "-C", str(ROOT), "push", "-u", "origin", branch],
             check=True
         )
         print("[sync] ✅ 已推送到 GitHub")
