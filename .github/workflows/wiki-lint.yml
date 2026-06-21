@@ -2,11 +2,7 @@ name: Wiki Lint
 
 on:
   schedule:
-<<<<<<< HEAD
-    - cron: '0 1 * * 1'  # 每周一 UTC 01:00（北京时间 09:00）
-=======
     - cron: '0 1 * * *'  # 每天 UTC 01:00（北京时间 09:00）
->>>>>>> origin/main
   workflow_dispatch:      # 支持手动触发
 
 permissions:
@@ -27,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r wiki_lint/requirements.txt
 
-      - name: Run wiki lint
+      - name: Run wiki lint（x scheme + 小咪 scheme 两套系统）
         id: lint
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
@@ -44,8 +40,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="🔍 Wiki Lint · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日')"
-          BODY=$(cat /tmp/lint_result.txt)
           gh issue create \
             --repo "${{ github.repository }}" \
             --title "$TITLE" \
-            --body "$BODY"
+            --body-file /tmp/lint_result.txt

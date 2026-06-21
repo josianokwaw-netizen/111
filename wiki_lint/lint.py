@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
-Wiki Lint — 按照「小咪约定层」扫描 Notion 三库，每周一运行。
-scheme: https://app.notion.com/p/3808335c510181ab91bce0d212f58457
+Wiki Lint — 按各自 scheme 约定扫描两套 Notion 三库，每天定时运行。
+
+本脚本同时复检两套独立的知识系统，每套都依据自己的 scheme 约定：
+  • x scheme   — https://app.notion.com/p/9db8335c510182f0bb2d01918f8b6f13
+  • 小咪 scheme — https://app.notion.com/p/3808335c510181ab91bce0d212f58457
+每套系统各有独立的「源库 / 维基库 / 日志库」，复检结果分别写回各自的日志库，
+并汇总成一份报告供 GitHub Actions 发 Issue 存档。
 
 Lint复检清单（完全按 scheme 约定）：
   ── 维基层 ──
@@ -35,8 +40,24 @@ from write_log import write_log
 NOTION_TOKEN   = os.environ["NOTION_TOKEN"]
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-WIKI_DB_ID   = "3cb8335c510183e5839681992705faaa"
-SOURCE_DB_ID = "d748335c510182ea885201b572eddef4"
+# 两套独立知识系统，各自依据自己的 scheme 约定复检。
+# 每套含独立的 源库 / 维基库 / 日志库，复检结果写回各自的日志库。
+SCHEMES = [
+    {
+        "name": "x scheme",
+        "scheme_url": "https://app.notion.com/p/9db8335c510182f0bb2d01918f8b6f13",
+        "wiki_db": "3cb8335c510183e5839681992705faaa",
+        "source_db": "d748335c510182ea885201b572eddef4",
+        "log_db": "36a8335c5101826296aa816dd77513f6",
+    },
+    {
+        "name": "小咪 scheme",
+        "scheme_url": "https://app.notion.com/p/3808335c510181ab91bce0d212f58457",
+        "wiki_db": "e1b8335c5101836bb60f81286f082229",
+        "source_db": "ec28335c510183d2a1ba01d62798874b",
+        "log_db": "da58335c510183eeaaa281337dca11d4",
+    },
+]
 
 BJ        = timezone(timedelta(hours=8))
 NOW       = datetime.now(BJ)
@@ -210,9 +231,9 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
 
 # ── 主检查逻辑 ────────────────────────────────────────────────────────────
 
-def run_lint() -> tuple[str, int, int, int]:
+def run_lint(cfg: dict) -> tuple[str, int, int, int]:
     # ── 维基库 ───────────────────────────────────────────────────────────
-    wiki_pages = query_all(WIKI_DB_ID)
+    wiki_pages = query_all(cfg["wiki_db"])
     total_wiki = len(wiki_pages)
 
     orphans: list[tuple]        = []
@@ -292,7 +313,7 @@ def run_lint() -> tuple[str, int, int, int]:
     # ── 源库 ─────────────────────────────────────────────────────────────
     source_pages: list[dict] = []
     try:
-        source_pages = query_all(SOURCE_DB_ID)
+        source_pages = query_all(cfg["source_db"])
     except Exception as e:
         print(f"⚠️ 源库查询失败：{e}", file=sys.stderr)
 
@@ -323,7 +344,7 @@ def run_lint() -> tuple[str, int, int, int]:
     total_issues = total_wiki_issues + total_source_issues
 
     lines = [
-        f"# 🔍 Wiki Lint 报告 · {NOW.strftime('%Y年%m月%d日')}",
+        f"# 🔍 {cfg['name']} · Lint 报告 · {NOW.strftime('%Y年%m月%d日')}",
         f"扫描维基页：**{total_wiki}** 个 | 源：**{len(source_pages)}** 个 | "
         f"发现问题：**{total_issues}** 个 | 自动标记：**{auto_marked}** 个",
         "",
@@ -422,8 +443,7 @@ def run_lint() -> tuple[str, int, int, int]:
         "---",
         f"*自动操作：已将 **{auto_marked}** 个页面标记（过时页→`过时` / 孤儿页→`待复检`）*",
         "*由 GitHub Actions 自动生成 · "
-        "scheme: [小咪约定层](https://app.notion.com/p/3808335c510181ab91bce0d212f58457) · "
-        "数据来源 Notion 三库*",
+        f"scheme: [{cfg['name']}]({cfg['scheme_url']}) · 数据来源 Notion 三库*",
     ]
     return "\n".join(lines), total_issues, total_wiki, auto_marked
 
@@ -431,22 +451,45 @@ def run_lint() -> tuple[str, int, int, int]:
 # ── 入口 ───────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    report, total_issues, page_count, auto_marked = run_lint()
-    print(report)
+    reports: list[str] = []
+    grand_total = 0
 
-    try:
-        write_log(
-            op="复检",
-            title=f"{NOW.strftime('%Y-%m-%d')} 定时复检",
-            detail=(
-                f"扫描 {page_count} 个维基页，发现 {total_issues} 个问题，"
-                f"自动标记 {auto_marked} 个页面"
-            ),
-        )
-    except Exception as e:
-        print(f"\n⚠️ Notion 日志写入失败：{e}", file=sys.stderr)
+    for cfg in SCHEMES:
+        try:
+            report, total_issues, page_count, auto_marked = run_lint(cfg)
+        except Exception as e:
+            grand_total += 1  # 让 CI 标红，便于发现某套系统复检失败
+            reports.append(
+                f"# 🔍 {cfg['name']} · Lint 报告 · {NOW.strftime('%Y年%m月%d日')}\n"
+                f"⚠️ 复检失败：{e}"
+            )
+            print(f"⚠️ [{cfg['name']}] 复检失败：{e}", file=sys.stderr)
+            continue
 
-    sys.exit(1 if total_issues > 0 else 0)
+        reports.append(report)
+        grand_total += total_issues
+
+        # 复检结果写回各自 scheme 的日志库
+        try:
+            write_log(
+                op="复检",
+                title=f"{NOW.strftime('%Y-%m-%d')} 定时复检",
+                detail=(
+                    f"[{cfg['name']}] 扫描 {page_count} 个维基页，"
+                    f"发现 {total_issues} 个问题，自动标记 {auto_marked} 个页面"
+                ),
+                log_db_id=cfg["log_db"],
+            )
+        except Exception as e:
+            print(
+                f"\n⚠️ [{cfg['name']}] Notion 日志写入失败：{e}",
+                file=sys.stderr,
+            )
+
+    # 汇总两套系统的报告，供 GitHub Actions 发同一条 Issue 存档
+    print("\n\n" + ("\n\n" + "=" * 60 + "\n\n").join(reports))
+
+    sys.exit(1 if grand_total > 0 else 0)
 
 
 if __name__ == "__main__":
