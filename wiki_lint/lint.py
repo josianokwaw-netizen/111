@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
 """
-Wiki Lint — 按照 scheme 约定扫描 Notion 维基库，每周一运行。
+Wiki Lint — 按照「小咪约定层」扫描 Notion 三库，每周一运行。
+scheme: https://app.notion.com/p/3808335c510181ab91bce0d212f58457
 
-检查项（对应 scheme Lint 复检清单）：
-  1. 孤儿页     — 无「依据源」且无「相关页」关联
-  2. 过时页     — 信号分 < 2，或「活跃」状态但 90 天未更新
-  3. 未解决矛盾  — 页面标记含「⚠️有矛盾」
-  4. 待合并页   — 页面标记含「📥待合并」
-  5. 高频缺页   — Gemini 分析一句话摘要，找高频但无独立页的概念（需 GEMINI_API_KEY）
+Lint复检清单（完全按 scheme 约定）：
+  ── 维基层 ──
+  1. 孤儿页     — 无「依据源」且无「相关页」→ 自动标记 `待复检`
+  2. 过时页     — 信号分<2，或非「过时」状态但3个月未更新 → 自动标记 `过时`
+  3. 缺一句话摘要 — 「一句话摘要」为空（scheme 必填字段）
+  4. 未解决矛盾  — 页面标记含「⚠️有矛盾」
+  5. 待合并页   — 页面标记含「📥待合并」
+  6. 内容相似页  — 页面标记含「🔁内容相似」
+  7. 存疑页     — 页面标记含「❓存疑」
+  8. 高频缺页   — Gemini 分析摘要/综合页，找高频但无独立实体/概念页的术语
+  ── 源库层 ──
+  9. 长期待摄入  — 状态=待摄入 且 加入超过7天
+  10. 孤儿源    — 状态=已摄入 但无「相关维基页」关联
 
-完成后往 Notion 日志库写一条「复检」记录。
-发现问题 → exit(1)，供 GitHub Actions 触发 Issue 通知。
+自动操作：过时页 → 标记 `过时`；纯孤儿页 → 标记 `待复检`
+写入日志：完成后往 Notion 日志库写一条「复检」记录
+发现问题 → exit(1)，供 GitHub Actions 触发 Issue 通知
 """
 
 import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from notion_client import Client
+import requests
+
 from write_log import write_log
 
 # ── 配置 ──────────────────────────────────────────────────────────────────
@@ -25,29 +35,53 @@ from write_log import write_log
 NOTION_TOKEN   = os.environ["NOTION_TOKEN"]
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-WIKI_DB_ID = "3cb8335c510183e5839681992705faaa"
+WIKI_DB_ID   = "3cb8335c510183e5839681992705faaa"
+SOURCE_DB_ID = "d748335c510182ea885201b572eddef4"
 
 BJ        = timezone(timedelta(hours=8))
 NOW       = datetime.now(BJ)
 CUTOFF_90 = NOW - timedelta(days=90)
+CUTOFF_7  = NOW - timedelta(days=7)
 
-notion = Client(auth=NOTION_TOKEN)
+NOTION_HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json",
+}
 
 
-# ── Notion 工具函数 ────────────────────────────────────────────────────────
+# ── Notion REST API 封装 ──────────────────────────────────────────────────
 
 def query_all(db_id: str) -> list[dict]:
     pages, cursor = [], None
     while True:
-        r = notion.databases.query(
-            database_id=db_id, start_cursor=cursor, page_size=100
+        payload: dict = {"page_size": 100}
+        if cursor:
+            payload["start_cursor"] = cursor
+        r = requests.post(
+            f"https://api.notion.com/v1/databases/{db_id}/query",
+            headers=NOTION_HEADERS,
+            json=payload,
         )
-        pages.extend(r["results"])
-        if not r.get("has_more"):
+        r.raise_for_status()
+        data = r.json()
+        pages.extend(data["results"])
+        if not data.get("has_more"):
             break
-        cursor = r["next_cursor"]
+        cursor = data["next_cursor"]
     return pages
 
+
+def patch_page(page_id: str, properties: dict) -> None:
+    r = requests.patch(
+        f"https://api.notion.com/v1/pages/{page_id}",
+        headers=NOTION_HEADERS,
+        json={"properties": properties},
+    )
+    r.raise_for_status()
+
+
+# ── 属性工具函数 ───────────────────────────────────────────────────────────
 
 def _prop(page: dict, field: str) -> dict:
     return page["properties"].get(field, {})
@@ -62,6 +96,18 @@ def title_of(page: dict) -> str:
 
 def select_of(page: dict, field: str) -> str:
     p = _prop(page, field)
+    if p.get("type") == "select":
+        v = p.get("select")
+        return v["name"] if v else ""
+    return ""
+
+
+def status_of(page: dict, field: str) -> str:
+    """兼容 Notion Status 类型（源库）和 Select 类型（维基库）。"""
+    p = _prop(page, field)
+    if p.get("type") == "status":
+        v = p.get("status")
+        return v["name"] if v else ""
     if p.get("type") == "select":
         v = p.get("select")
         return v["name"] if v else ""
@@ -101,6 +147,15 @@ def last_edited(page: dict) -> datetime:
         t = p.get("last_edited_time", "")
     else:
         t = page.get("last_edited_time", "1970-01-01T00:00:00.000Z")
+    return datetime.fromisoformat(t.replace("Z", "+00:00")).astimezone(BJ)
+
+
+def created_time_of(page: dict, field: str = "加入时间") -> datetime:
+    p = _prop(page, field)
+    if p.get("type") == "created_time":
+        t = p.get("created_time", "")
+    else:
+        t = page.get("created_time", "1970-01-01T00:00:00.000Z")
     return datetime.fromisoformat(t.replace("Z", "+00:00")).astimezone(BJ)
 
 
@@ -144,9 +199,9 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
         )
         resp  = model.generate_content(prompt)
         lines = [
-            l.strip()
-            for l in resp.text.strip().splitlines()
-            if l.strip() and "」" in l
+            ln.strip()
+            for ln in resp.text.strip().splitlines()
+            if ln.strip() and "」" in ln
         ]
         return lines[:5]
     except Exception as e:
@@ -155,62 +210,130 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
 
 # ── 主检查逻辑 ────────────────────────────────────────────────────────────
 
-def run_lint() -> tuple[str, int, int]:
-    pages = query_all(WIKI_DB_ID)
-    total = len(pages)
+def run_lint() -> tuple[str, int, int, int]:
+    # ── 维基库 ───────────────────────────────────────────────────────────
+    wiki_pages = query_all(WIKI_DB_ID)
+    total_wiki = len(wiki_pages)
 
     orphans: list[tuple]        = []
     outdated: list[tuple]       = []
+    no_summary: list[tuple]     = []
     contradictions: list[tuple] = []
     to_merge: list[tuple]       = []
+    similar: list[tuple]        = []
+    uncertain: list[tuple]      = []
 
-    for p in pages:
+    # 先收集所有问题，再统一自动标记（过时优先于孤儿）
+    page_issues: list[dict] = []
+
+    for p in wiki_pages:
         t       = title_of(p)
+        pid     = p["id"]
         url     = p.get("url", "")
         score   = number_of(p, "信号分")
         status  = select_of(p, "状态")
         marks   = multi_of(p, "页面标记")
         has_src = relation_any(p, "依据源")
         has_rel = relation_any(p, "相关页")
+        summary = text_of(p, "一句话摘要")
         le      = last_edited(p)
 
-        # 1. 孤儿页
-        if not has_src and not has_rel:
-            orphans.append((t, url, status or "—"))
+        is_orphan = not has_src and not has_rel
 
-        # 2. 过时页
-        reasons = []
+        outdated_reasons: list[str] = []
         if score is not None and score < 2:
-            reasons.append(f"信号分={score}")
-        if status == "活跃" and le < CUTOFF_90:
-            reasons.append(f"90天未更新（{le.strftime('%Y-%m-%d')}）")
-        if reasons:
-            outdated.append((t, url, "、".join(reasons)))
+            outdated_reasons.append(f"信号分={score}")
+        if status != "过时" and le < CUTOFF_90:
+            outdated_reasons.append(f"3个月未更新（{le.strftime('%Y-%m-%d')}）")
+        is_outdated = bool(outdated_reasons)
 
-        # 3. 未解决矛盾
+        if is_orphan:
+            orphans.append((t, url, status or "—"))
+        if is_outdated:
+            outdated.append((t, url, "、".join(outdated_reasons)))
+        if not summary.strip():
+            no_summary.append((t, url, select_of(p, "页面类型") or "—"))
         if "⚠️有矛盾" in marks:
             contradictions.append((t, url))
-
-        # 4. 待合并
         if "📥待合并" in marks:
             to_merge.append((t, url))
+        if "🔁内容相似" in marks:
+            similar.append((t, url))
+        if "❓存疑" in marks:
+            uncertain.append((t, url))
 
-    # 5. Gemini 高频缺页
-    missing = find_missing_concepts(pages)
+        if is_orphan or is_outdated:
+            page_issues.append({
+                "pid": pid, "t": t,
+                "status": status,
+                "is_outdated": is_outdated,
+                "is_orphan": is_orphan,
+            })
 
-    # ── 构建报告 ────────────────────────────────────────────────────────
-    total_issues = (
-        len(orphans) + len(outdated) + len(contradictions) + len(to_merge)
+    # 自动标记：过时 > 孤儿
+    auto_marked = 0
+    for d in page_issues:
+        if d["is_outdated"] and d["status"] != "过时":
+            try:
+                patch_page(d["pid"], {"状态": {"select": {"name": "过时"}}})
+                auto_marked += 1
+            except Exception as e:
+                print(f"⚠️ 自动标记失败[过时] {d['t']}: {e}", file=sys.stderr)
+        elif d["is_orphan"] and d["status"] not in ("待复检", "过时"):
+            try:
+                patch_page(d["pid"], {"状态": {"select": {"name": "待复检"}}})
+                auto_marked += 1
+            except Exception as e:
+                print(f"⚠️ 自动标记失败[孤儿] {d['t']}: {e}", file=sys.stderr)
+
+    # 8. Gemini 高频缺页
+    missing = find_missing_concepts(wiki_pages)
+
+    # ── 源库 ─────────────────────────────────────────────────────────────
+    source_pages: list[dict] = []
+    try:
+        source_pages = query_all(SOURCE_DB_ID)
+    except Exception as e:
+        print(f"⚠️ 源库查询失败：{e}", file=sys.stderr)
+
+    pending_old: list[tuple]    = []
+    orphan_sources: list[tuple] = []
+
+    for s in source_pages:
+        t_s    = title_of(s)
+        url_s  = s.get("url", "")
+        st     = status_of(s, "状态")
+        has_wk = relation_any(s, "相关维基页")
+        ct     = created_time_of(s)
+
+        # 9. 长期待摄入（超7天）
+        if st == "待摄入" and ct < CUTOFF_7:
+            pending_old.append((t_s, url_s, f"加入于 {ct.strftime('%Y-%m-%d')}"))
+
+        # 10. 孤儿源（已摄入但无关联维基页）
+        if st == "已摄入" and not has_wk:
+            orphan_sources.append((t_s, url_s, "已摄入但无关联维基页"))
+
+    # ── 构建报告 ─────────────────────────────────────────────────────────
+    total_wiki_issues = (
+        len(orphans) + len(outdated) + len(no_summary)
+        + len(contradictions) + len(to_merge) + len(similar) + len(uncertain)
     )
+    total_source_issues = len(pending_old) + len(orphan_sources)
+    total_issues = total_wiki_issues + total_source_issues
+
     lines = [
         f"# 🔍 Wiki Lint 报告 · {NOW.strftime('%Y年%m月%d日')}",
-        f"扫描维基页：**{total}** 个 | 发现问题：**{total_issues}** 个",
+        f"扫描维基页：**{total_wiki}** 个 | 源：**{len(source_pages)}** 个 | "
+        f"发现问题：**{total_issues}** 个 | 自动标记：**{auto_marked}** 个",
         "",
         "---",
+        "",
+        "## 📖 维基层检查",
     ]
 
     def section(header: str, items: list, advice: str) -> None:
-        lines.append(f"\n## {header}（{len(items)} 个）")
+        lines.append(f"\n### {header}（{len(items)} 个）")
         if items:
             for row in items:
                 name, url = row[0], row[1]
@@ -223,49 +346,102 @@ def run_lint() -> tuple[str, int, int]:
     section(
         "1. 孤儿页（无依据源 & 无相关页）",
         orphans,
-        "补充「依据源」或「相关页」关联；确认无用则将状态改为`过时`",
+        "已自动标记为`待复检`；补充「依据源」或「相关页」关联，确认无用则改为`过时`",
     )
     section(
-        "2. 过时页",
+        "2. 过时页（信号分<2 或3个月未更新）",
         outdated,
-        "更新内容或将状态改为`过时`",
+        "已自动标记为`过时`；更新内容后在 Notion 手动恢复为`活跃`",
     )
     section(
-        "3. 未解决矛盾（页面标记含 ⚠️有矛盾）",
+        "3. 缺一句话摘要（scheme 必填字段）",
+        no_summary,
+        "填写「一句话摘要」字段，方便索引扫读",
+    )
+    section(
+        "4. 未解决矛盾（⚠️有矛盾）",
         contradictions,
-        "确认对应综合页已含「我的判断」后取消标记；否则在综合页补充判断",
+        "在综合页补充「我的判断」后取消标记；否则进入 Wiki 首页活矛盾表追踪",
     )
     section(
-        "4. 待合并页（页面标记含 📥待合并）",
+        "5. 待合并页（📥待合并）",
         to_merge,
-        "合并后删除多余页，并更新所有关联页的「相关页」字段",
+        "合并后删除多余页，更新所有关联页的「相关页」字段",
+    )
+    section(
+        "6. 内容相似页（🔁内容相似）",
+        similar,
+        "判断是否合并；若保留两页则在「关系说明」字段说明差异",
+    )
+    section(
+        "7. 存疑页（❓存疑）",
+        uncertain,
+        "确认存疑内容后取消标记或修正；无法确认则升级为「⚠️有矛盾」",
     )
 
     if missing:
-        lines.append(f"\n## 5. 高频概念缺页（Gemini 分析，共 {len(missing)} 条）")
+        lines.append(f"\n### 8. 高频概念缺页（Gemini 分析，共 {len(missing)} 条）")
         for c in missing:
             lines.append(f"- {c}")
-        lines.append("\n> 建议：考虑新建对应实体或概念页并回链")
+        lines.append("\n> 建议：新建对应实体或概念页并回链至相关摘要/综合页")
+    else:
+        lines.append("\n### 8. 高频概念缺页（Gemini 分析）")
+        lines.append("✅ 无（或未配置 GEMINI_API_KEY）")
 
     lines += [
         "",
         "---",
-        "*由 GitHub Actions 自动生成 · 数据来源 Notion 维基库*",
+        "",
+        "## 📚 源库层检查",
     ]
-    return "\n".join(lines), total_issues, total
+
+    def source_section(header: str, items: list, advice: str) -> None:
+        lines.append(f"\n### {header}（{len(items)} 个）")
+        if items:
+            for row in items:
+                name, url = row[0], row[1]
+                note = f" — {row[2]}" if len(row) > 2 and row[2] else ""
+                lines.append(f"- [{name}]({url}){note}")
+            lines.append(f"\n> 建议：{advice}")
+        else:
+            lines.append("✅ 无")
+
+    source_section(
+        "9. 长期待摄入（超7天未处理）",
+        pending_old,
+        "决定走 Ingest 流程或从队列移除",
+    )
+    source_section(
+        "10. 孤儿源（已摄入但无关联维基页）",
+        orphan_sources,
+        "补充「相关维基页」关联；或确认是否需要补建摘要页",
+    )
+
+    lines += [
+        "",
+        "---",
+        f"*自动操作：已将 **{auto_marked}** 个页面标记（过时页→`过时` / 孤儿页→`待复检`）*",
+        "*由 GitHub Actions 自动生成 · "
+        "scheme: [小咪约定层](https://app.notion.com/p/3808335c510181ab91bce0d212f58457) · "
+        "数据来源 Notion 三库*",
+    ]
+    return "\n".join(lines), total_issues, total_wiki, auto_marked
 
 
 # ── 入口 ───────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    report, total_issues, page_count = run_lint()
+    report, total_issues, page_count, auto_marked = run_lint()
     print(report)
 
     try:
         write_log(
             op="复检",
             title=f"{NOW.strftime('%Y-%m-%d')} 定时复检",
-            detail=f"扫描 {page_count} 个维基页，发现 {total_issues} 个问题",
+            detail=(
+                f"扫描 {page_count} 个维基页，发现 {total_issues} 个问题，"
+                f"自动标记 {auto_marked} 个页面"
+            ),
         )
     except Exception as e:
         print(f"\n⚠️ Notion 日志写入失败：{e}", file=sys.stderr)

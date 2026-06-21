@@ -1,0 +1,39 @@
+name: Letta Memory Sync
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 每天北京时间 09:00 自动同步
+  workflow_dispatch:        # 支持手动触发（随时点 Run workflow）
+
+permissions:
+  contents: write           # 需要写权限才能 commit memory_cache.md
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install letta-client
+        run: pip install -q letta-client
+
+      - name: 从 Letta 拉取记忆块并写入缓存
+        env:
+          LETTA_API_KEY: ${{ secrets.LETTA_API_KEY }}
+        run: python letta/letta_memory.py --cache
+
+      - name: 提交更新的缓存文件（无变化则跳过）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet letta/memory_cache.md || (
+            git add letta/memory_cache.md &&
+            git commit -m "chore(letta): 自动同步记忆缓存 $(date '+%Y-%m-%d')" &&
+            git push
+          )
