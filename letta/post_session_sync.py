@@ -75,12 +75,8 @@ def refresh_cache(client, agent_id):
 # ── LLM 提取记忆 ──────────────────────────────────────
 def extract_with_gemini(transcript: str, current_human: str) -> dict | None:
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-
-        prompt = f"""
-分析以下对话摘要，提取值得长期记住的用户信息（偏好、习惯、重要决策、项目进展）。
+        import urllib.request
+        prompt = f"""分析以下对话摘要，提取值得长期记住的用户信息（偏好、习惯、重要决策、项目进展）。
 若本次对话无新信息，返回 {{"should_update": false}}。
 
 当前已知用户信息:
@@ -89,11 +85,17 @@ def extract_with_gemini(transcript: str, current_human: str) -> dict | None:
 本次对话摘要:
 {transcript}
 
-返回 JSON（不要 markdown 代码块）:
-{{"should_update": true/false, "new_human_info": "更新后的完整用户信息（中文）"}}
-"""
-        result = model.generate_content(prompt)
-        return json.loads(result.text.strip())
+只返回 JSON，不要 markdown 代码块:
+{{"should_update": true/false, "new_human_info": "更新后的完整用户信息（中文）"}}"""
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+        body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        text = text.strip("```json").strip("```").strip()
+        return json.loads(text)
     except Exception as e:
         print(f"[sync] Gemini 提取失败: {e}", file=sys.stderr)
         return None
