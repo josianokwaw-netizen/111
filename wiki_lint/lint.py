@@ -22,9 +22,9 @@ Lint复检清单（完全按 scheme 约定）：
   9. 长期待摄入  — 状态=待摄入 且 加入超过7天
   10. 孤儿源    — 状态=已摄入 但无「相关维基页」关联
 
-自动操作：过时页 → 标记 `过时`；纯孤儿页 → 标记 `待复检`
-写入日志：完成后往 Notion 日志库写一条「复检」记录
-发现问题 → exit(1)，供 GitHub Actions 触发 Issue 通知
+仅报告，不自动改写 Notion 状态。请按报告建议手动处理。
+写入日志：完成后往各自 scheme 的 Notion 日志库写一条「复检」记录。
+发现问题 → exit(1)，供 GitHub Actions 触发 Issue 通知。
 """
 
 import os
@@ -92,14 +92,6 @@ def query_all(db_id: str) -> list[dict]:
         cursor = data["next_cursor"]
     return pages
 
-
-def patch_page(page_id: str, properties: dict) -> None:
-    r = requests.patch(
-        f"https://api.notion.com/v1/pages/{page_id}",
-        headers=NOTION_HEADERS,
-        json={"properties": properties},
-    )
-    r.raise_for_status()
 
 
 # ── 属性工具函数 ───────────────────────────────────────────────────────────
@@ -208,9 +200,8 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
     existing = "、".join(list(entity_titles)[:40]) or "（无）"
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        from google import genai
+        client = genai.Client(api_key=GEMINI_API_KEY)
         prompt = (
             f"以下是知识维基的页面列表（格式：[类型] 标题：摘要）：\n\n{corpus}\n\n"
             f"已有独立「实体」或「概念」页：{existing}\n\n"
@@ -218,7 +209,10 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
             "只列最重要的 3–5 个，每行一个，格式：「概念名」（约 N 次）\n"
             "不要解释，不要多余文字。"
         )
-        resp  = model.generate_content(prompt)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+        )
         lines = [
             ln.strip()
             for ln in resp.text.strip().splitlines()
@@ -283,29 +277,7 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         if "❓存疑" in marks:
             uncertain.append((t, url))
 
-        if is_orphan or is_outdated:
-            page_issues.append({
-                "pid": pid, "t": t,
-                "status": status,
-                "is_outdated": is_outdated,
-                "is_orphan": is_orphan,
-            })
-
-    # 自动标记：过时 > 孤儿
-    auto_marked = 0
-    for d in page_issues:
-        if d["is_outdated"] and d["status"] != "过时":
-            try:
-                patch_page(d["pid"], {"状态": {"select": {"name": "过时"}}})
-                auto_marked += 1
-            except Exception as e:
-                print(f"⚠️ 自动标记失败[过时] {d['t']}: {e}", file=sys.stderr)
-        elif d["is_orphan"] and d["status"] not in ("待复检", "过时"):
-            try:
-                patch_page(d["pid"], {"状态": {"select": {"name": "待复检"}}})
-                auto_marked += 1
-            except Exception as e:
-                print(f"⚠️ 自动标记失败[孤儿] {d['t']}: {e}", file=sys.stderr)
+        # 不再自动写回 Notion，仅收集用于报告
 
     # 8. Gemini 高频缺页
     missing = find_missing_concepts(wiki_pages)
@@ -346,7 +318,7 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
     lines = [
         f"# 🔍 {cfg['name']} · Lint 报告 · {NOW.strftime('%Y年%m月%d日')}",
         f"扫描维基页：**{total_wiki}** 个 | 源：**{len(source_pages)}** 个 | "
-        f"发现问题：**{total_issues}** 个 | 自动标记：**{auto_marked}** 个",
+        f"发现问题：**{total_issues}** 个",
         "",
         "---",
         "",
@@ -367,12 +339,12 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
     section(
         "1. 孤儿页（无依据源 & 无相关页）",
         orphans,
-        "已自动标记为`待复检`；补充「依据源」或「相关页」关联，确认无用则改为`过时`",
+        "手动补充「依据源」或「相关页」关联；确认无用则在 Notion 改为`过时`",
     )
     section(
         "2. 过时页（信号分<2 或3个月未更新）",
         outdated,
-        "已自动标记为`过时`；更新内容后在 Notion 手动恢复为`活跃`",
+        "更新内容后手动恢复为`活跃`，或确认过时后在 Notion 改为`过时`",
     )
     section(
         "3. 缺一句话摘要（scheme 必填字段）",
@@ -409,6 +381,17 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         lines.append("\n### 8. 高频概念缺页（Gemini 分析）")
         lines.append("✅ 无（或未配置 GEMINI_API_KEY）")
 
+    # ── 活矛盾表（未解决矛盾汇总，供 Wiki 首页维护参考） ──────────────────
+    if contradictions:
+        lines.append("\n---\n\n## ⚠️ 活矛盾表（需在 Wiki 首页维护）")
+        lines.append("以下页面标记了「⚠️有矛盾」但尚未写明「我的判断」，请逐一处理：")
+        for name, url in contradictions:
+            lines.append(f"- [ ] [{name}]({url})")
+        lines.append(
+            "\n> 处理方式：在综合页写明「我的判断」后取消 ⚠️有矛盾 标记；"
+            "如无综合页则先新建。全部处理完后删除本表条目。"
+        )
+
     lines += [
         "",
         "---",
@@ -441,11 +424,11 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
     lines += [
         "",
         "---",
-        f"*自动操作：已将 **{auto_marked}** 个页面标记（过时页→`过时` / 孤儿页→`待复检`）*",
+        "*仅报告，不自动改写 Notion 状态。请按建议手动处理后在 Notion 更新状态。*",
         "*由 GitHub Actions 自动生成 · "
         f"scheme: [{cfg['name']}]({cfg['scheme_url']}) · 数据来源 Notion 三库*",
     ]
-    return "\n".join(lines), total_issues, total_wiki, auto_marked
+    return "\n".join(lines), total_issues, total_wiki
 
 
 # ── 入口 ───────────────────────────────────────────────────────────────────
@@ -456,7 +439,7 @@ def main() -> None:
 
     for cfg in SCHEMES:
         try:
-            report, total_issues, page_count, auto_marked = run_lint(cfg)
+            report, total_issues, page_count = run_lint(cfg)
         except Exception as e:
             grand_total += 1  # 让 CI 标红，便于发现某套系统复检失败
             reports.append(
@@ -475,8 +458,7 @@ def main() -> None:
                 op="复检",
                 title=f"{NOW.strftime('%Y-%m-%d')} 定时复检",
                 detail=(
-                    f"[{cfg['name']}] 扫描 {page_count} 个维基页，"
-                    f"发现 {total_issues} 个问题，自动标记 {auto_marked} 个页面"
+                    f"[{cfg['name']}] 扫描 {page_count} 个维基页，发现 {total_issues} 个问题"
                 ),
                 log_db_id=cfg["log_db"],
             )
