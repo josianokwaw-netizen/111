@@ -1,12 +1,16 @@
 name: Letta Memory Sync
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'letta/pending_transcript.txt'   # Stop Hook 推送 transcript 后自动触发
   schedule:
-    - cron: '0 1 * * *'   # 每天北京时间 09:00 自动同步
-  workflow_dispatch:        # 支持手动触发（随时点 Run workflow）
+    - cron: '0 16 * * *'                 # 每天北京时间 00:00 兜底同步
+  workflow_dispatch:
 
 permissions:
-  contents: write           # 需要写权限才能 commit memory_cache.md
+  contents: write
 
 jobs:
   sync:
@@ -20,20 +24,131 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install letta-client
-        run: pip install -q letta-client
+      - name: Install deps
+        run: pip install -q letta-client openai
 
-      - name: 从 Letta 拉取记忆块并写入缓存
+      - name: 提取记忆并写入 Letta
         env:
-          LETTA_API_KEY: ${{ secrets.LETTA_API_KEY }}
-        run: python letta/letta_memory.py --cache
+          LETTA_API_KEY:    ${{ secrets.LETTA_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python - <<'PYEOF'
+          import os, json, urllib.request
+          from letta_client import Letta
 
-      - name: 提交更新的缓存文件（无变化则跳过）
+          LETTA_API_KEY    = os.environ["LETTA_API_KEY"]
+          GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
+          DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+          AGENT_NAME       = "claude-codex-memory"
+
+          # 读取 transcript
+          transcript_file = "letta/pending_transcript.txt"
+          transcript = ""
+          if os.path.exists(transcript_file):
+              with open(transcript_file, encoding="utf-8") as f:
+                  transcript = f.read().strip()
+          if not transcript:
+              print("无 transcript，跳过 LLM 提取")
+          
+          # 连接 Letta
+          client = Letta(api_key=LETTA_API_KEY)
+          agent_id = None
+          for a in client.agents.list(name=AGENT_NAME):
+              if a.name == AGENT_NAME:
+                  agent_id = a.id
+                  break
+          if not agent_id:
+              print(f"未找到 agent {AGENT_NAME}")
+              exit(0)
+
+          blocks = list(client.agents.blocks.list(agent_id=agent_id))
+          memory = {b.label: b.value for b in blocks}
+          current_human = memory.get("human", "")
+          print(f"当前 human memory: {current_human[:80]}")
+
+          # Gemini 提取
+          def extract_gemini(transcript, current_human):
+              prompt = f"""分析以下对话摘要，提取值得长期记住的用户信息（偏好、习惯、重要决策、项目进展）。
+          若本次对话无新信息，返回 {{"should_update": false}}。
+
+          当前已知用户信息:
+          {current_human}
+
+          本次对话摘要:
+          {transcript}
+
+          只返回 JSON，不要 markdown 代码块:
+          {{"should_update": true, "new_human_info": "更新后的完整用户信息（中文）"}}"""
+              url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+              body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+              req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  data = json.loads(resp.read())
+              text = data["candidates"][0]["content"]["parts"][0]["text"].strip().strip("```json").strip("```").strip()
+              return json.loads(text)
+
+          # DeepSeek 备用
+          def extract_deepseek(transcript, current_human):
+              from openai import OpenAI
+              c = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+              prompt = f"""分析以下对话摘要，提取值得长期记住的用户信息。
+          若无新信息返回 {{"should_update": false}}。
+          当前: {current_human}
+          对话: {transcript}
+          只返回JSON: {{"should_update": true, "new_human_info": "..."}}"""
+              r = c.chat.completions.create(
+                  model="deepseek-chat",
+                  messages=[{"role": "user", "content": prompt}],
+                  response_format={"type": "json_object"}
+              )
+              return json.loads(r.choices[0].message.content)
+
+          if transcript:
+              result = None
+              if GEMINI_API_KEY:
+                  try:
+                      result = extract_gemini(transcript, current_human)
+                      print(f"Gemini 结果: {result}")
+                  except Exception as e:
+                      print(f"Gemini 失败: {e}")
+              if not result and DEEPSEEK_API_KEY:
+                  try:
+                      result = extract_deepseek(transcript, current_human)
+                      print(f"DeepSeek 结果: {result}")
+                  except Exception as e:
+                      print(f"DeepSeek 失败: {e}")
+              if result and result.get("should_update") and result.get("new_human_info"):
+                  client.agents.blocks.update(
+                      block_label="human",
+                      agent_id=agent_id,
+                      value=result["new_human_info"]
+                  )
+                  print(f"✅ 记忆已更新: {result['new_human_info'][:80]}")
+              else:
+                  print("本次无新记忆")
+
+          # 更新缓存文件
+          blocks = list(client.agents.blocks.list(agent_id=agent_id))
+          lines = ["<!-- Letta Memory Start -->", ""]
+          for b in blocks:
+              lines.append(f"### [{b.label}]")
+              lines.append(b.value.strip())
+              lines.append("")
+          lines.append("<!-- Letta Memory End -->")
+          with open("letta/memory_cache.md", "w", encoding="utf-8") as f:
+              f.write("\n".join(lines))
+          print("✅ 缓存已更新")
+          PYEOF
+
+      - name: 清理 transcript 并提交缓存
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet letta/memory_cache.md || (
-            git add letta/memory_cache.md &&
-            git commit -m "chore(letta): 自动同步记忆缓存 $(date '+%Y-%m-%d')" &&
+          # 清空 transcript 避免重复触发
+          echo "" > letta/pending_transcript.txt
+          git add letta/pending_transcript.txt letta/memory_cache.md
+          git diff --staged --quiet || (
+            git commit -m "chore(letta): memory sync $(date '+%Y-%m-%d %H:%M')" &&
             git push
           )
