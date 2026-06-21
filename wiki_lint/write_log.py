@@ -25,6 +25,8 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+# 默认日志库 = x scheme 日志库（向后兼容）。
+# lint.py 会按各 scheme 显式传入对应的 log_db_id。
 LOG_DB_ID = "36a8335c5101826296aa816dd77513f6"
 BJ = timezone(timedelta(hours=8))
 
@@ -48,6 +50,7 @@ def write_log(
     wiki_pages: list[str] | None = None,
     source_pages: list[str] | None = None,
     notion_token: str | None = None,
+    log_db_id: str | None = None,
 ) -> None:
     token = notion_token or os.environ.get("NOTION_TOKEN", "")
     if not token:
@@ -78,7 +81,7 @@ def write_log(
         if ids:
             props["相关源"] = {"relation": [{"id": i} for i in ids]}
 
-    payload = {"parent": {"database_id": LOG_DB_ID}, "properties": props}
+    payload = {"parent": {"database_id": log_db_id or LOG_DB_ID}, "properties": props}
     r = requests.post(
         "https://api.notion.com/v1/pages",
         headers=headers,
