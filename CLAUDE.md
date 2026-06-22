@@ -1,7 +1,11 @@
 # Wiki 知识管理系统 · Claude 行为规范
 
 配套 Notion 三库知识系统（源库 · 维基库 · 日志库）。
+
+**本仓职责**：workflow 自动化（每日 wiki lint）+ 投资知识库（💹 invest-wiki）。
+
 Scheme 约定（小咪约定层）：https://app.notion.com/p/3808335c510181ab91bce0d212f58457
+Scheme 约定（投资约定层）：https://app.notion.com/p/3878335c510181389db8efd6f92d8def
 
 ---
 
@@ -55,12 +59,24 @@ python write_log.py \
 | 维基库 | `3cb8335c510183e5839681992705faaa` |
 | 日志库 | `36a8335c5101826296aa816dd77513f6` |
 
+**💹 投资库（invest-wiki）**
+
+| 库 | database_id |
+|----|-------------|
+| 投资源库 | `e4f8d3694ebb49cd9112807ae0517248` |
+| 投资维基 | `1aaf457a389f439880a18255de0089d9` |
+| 投资日志 | `5930b1a8fca74a0389d3b7f3eff83195` |
+
+投资库容器页：https://app.notion.com/p/3878335c51018183ab85c4ba29058444
+
+**投资库红线**：内容不构成买卖建议；无实时行情工具，价格/公告需用户自行核查；逻辑链是核心，价格是参考。
+
 ---
 
 ## Lint 自动运行
 
-GitHub Actions 每周一 09:00 北京时间自动执行 `wiki_lint/lint.py`，
-完成后自动写日志，有问题时发 GitHub Issue 通知。
+GitHub Actions **每天** 09:00 北京时间自动执行 `wiki_lint/lint.py`，
+完成后自动写 Notion 日志（x + 小咪 各一条），**仅脚本崩溃时**发 GitHub Issue 通知。
 无需手动触发，但可在 Actions 页面点 Run workflow 立即跑一次。
 
 ### Lint 检查项（完全按 scheme 约定）

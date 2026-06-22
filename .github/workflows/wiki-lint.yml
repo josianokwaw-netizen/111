@@ -5,6 +5,11 @@ on:
     - cron: '0 1 * * *'  # 每天 UTC 01:00（北京时间 09:00）
   workflow_dispatch:      # 支持手动触发
 
+# 防止手动触发与定时触发撞车
+concurrency:
+  group: wiki-lint
+  cancel-in-progress: false
+
 permissions:
   issues: write
 
@@ -24,6 +29,9 @@ jobs:
         run: pip install -r wiki_lint/requirements.txt
 
       - name: Run wiki lint（x scheme + 小咪 scheme 两套系统）
+        # lint.py 内部行为约定：
+        #   - 检查到 wiki 问题 → 自动写回各系统 Notion 日志库，恒 exit 0
+        #   - 脚本本身崩溃（网络/API/代码异常） → exit 非 0
         id: lint
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
@@ -34,13 +42,25 @@ jobs:
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/lint_result.txt
 
-      - name: Post Issue（发现问题时）
+      - name: 崩溃告警 Issue（仅脚本崩溃时发，wiki 问题已写入 Notion 日志库）
         if: steps.lint.outputs.exit_code != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TITLE="🔍 Wiki Lint · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日')"
+          TITLE="🚨 Wiki Lint 崩溃 · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日')"
+          {
+            echo "## Wiki Lint 脚本异常退出"
+            echo ""
+            echo "exit_code: ${{ steps.lint.outputs.exit_code }}"
+            echo ""
+            echo "### 崩溃日志"
+            echo '```'
+            cat /tmp/lint_result.txt
+            echo '```'
+            echo ""
+            echo "> wiki 检查结果（孤儿页/过时页等）正常时写入 Notion 日志库，此 Issue 仅代表脚本崩溃。"
+          } > /tmp/crash_report.txt
           gh issue create \
             --repo "${{ github.repository }}" \
             --title "$TITLE" \
-            --body-file /tmp/lint_result.txt
+            --body-file /tmp/crash_report.txt
