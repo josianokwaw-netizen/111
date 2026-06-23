@@ -21,6 +21,9 @@ Lint复检清单（完全按 scheme 约定）：
   ── 源库层 ──
   9. 长期待摄入  — 状态=待摄入 且 加入超过7天
   10. 孤儿源    — 状态=已摄入 但无「相关维基页」关联
+  ── 质量层 ──
+  11. 字段完整性 — 信号分/目标对齐/依据源，以及有标记或相关页时关系说明 为空
+  12. 错字检查  — Gemini 扫描标题和一句话摘要，找明显汉字错别字
 
 仅报告，不自动改写 Notion 状态。请按报告建议手动处理。
 写入日志：完成后往各自 scheme 的 Notion 日志库写一条「复检」记录。
@@ -223,20 +226,60 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
         return [f"（Gemini 分析失败：{e}）"]
 
 
+def find_typos(pages: list[dict]) -> list[str]:
+    """用 Gemini 检查标题和一句话摘要中的明显错别字。"""
+    if not GEMINI_API_KEY:
+        return []
+
+    items = []
+    for p in pages:
+        t = title_of(p)
+        s = text_of(p, "一句话摘要")
+        if t or s:
+            items.append(f"【{t}】{s}")
+
+    if not items:
+        return []
+
+    corpus = "\n".join(items[:150])
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        prompt = (
+            f"以下是知识维基页面的标题和摘要，请找出其中明显的错别字（汉字书写错误）：\n\n{corpus}\n\n"
+            "格式：每行一条，「错误原文」→「正确写法」（来自页面：标题片段）\n"
+            "仅报告明显的汉字拼写错误，不评价内容好坏。无错别字则只输出：无\n"
+            "不要解释，不要多余文字。"
+        )
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+        )
+        result = resp.text.strip()
+        if not result or result == "无":
+            return []
+        found = [ln.strip() for ln in result.splitlines() if ln.strip() and "→" in ln]
+        return found[:10]
+    except Exception as e:
+        return [f"（错字检查失败：{e}）"]
+
+
 # ── 主检查逻辑 ────────────────────────────────────────────────────────────
 
-def run_lint(cfg: dict) -> tuple[str, int, int, int]:
+def run_lint(cfg: dict) -> tuple[str, int, int, list[str]]:
     # ── 维基库 ───────────────────────────────────────────────────────────
     wiki_pages = query_all(cfg["wiki_db"])
     total_wiki = len(wiki_pages)
 
-    orphans: list[tuple]        = []
-    outdated: list[tuple]       = []
-    no_summary: list[tuple]     = []
-    contradictions: list[tuple] = []
-    to_merge: list[tuple]       = []
-    similar: list[tuple]        = []
-    uncertain: list[tuple]      = []
+    orphans: list[tuple]           = []
+    outdated: list[tuple]          = []
+    no_summary: list[tuple]        = []
+    contradictions: list[tuple]    = []
+    to_merge: list[tuple]          = []
+    similar: list[tuple]           = []
+    uncertain: list[tuple]         = []
+    incomplete_fields: list[tuple] = []
 
     # 先收集所有问题，再统一自动标记（过时优先于孤儿）
     page_issues: list[dict] = []
@@ -277,10 +320,27 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         if "❓存疑" in marks:
             uncertain.append((t, url))
 
+        # 11. 字段完整性：信号分/目标对齐/依据源/关系说明（有标记或相关页时必填）
+        if t:
+            missing_f: list[str] = []
+            if number_of(p, "信号分") is None:
+                missing_f.append("信号分")
+            if not select_of(p, "目标对齐"):
+                missing_f.append("目标对齐")
+            if not relation_any(p, "依据源"):
+                missing_f.append("依据源")
+            if (marks or relation_any(p, "相关页")) and not text_of(p, "关系说明").strip():
+                missing_f.append("关系说明")
+            if missing_f:
+                incomplete_fields.append((t, url, "缺：" + "、".join(missing_f)))
+
         # 不再自动写回 Notion，仅收集用于报告
 
     # 8. Gemini 高频缺页
     missing = find_missing_concepts(wiki_pages)
+
+    # 12. Gemini 错字检查
+    typos = find_typos(wiki_pages)
 
     # ── 源库 ─────────────────────────────────────────────────────────────
     source_pages: list[dict] = []
@@ -311,6 +371,7 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
     total_wiki_issues = (
         len(orphans) + len(outdated) + len(no_summary)
         + len(contradictions) + len(to_merge) + len(similar) + len(uncertain)
+        + len(incomplete_fields) + len(typos)
     )
     total_source_issues = len(pending_old) + len(orphan_sources)
     total_issues = total_wiki_issues + total_source_issues
@@ -381,6 +442,12 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         lines.append("\n### 8. 高频概念缺页（Gemini 分析）")
         lines.append("✅ 无（或未配置 GEMINI_API_KEY）")
 
+    section(
+        "11. 字段不完整（信号分/目标对齐/依据源/关系说明）",
+        incomplete_fields,
+        "摄入时强制建链（依据源/相关页）并填关系说明；评估内容后补信号分和目标对齐",
+    )
+
     # ── 活矛盾表（未解决矛盾汇总，供 Wiki 首页维护参考） ──────────────────
     if contradictions:
         lines.append("\n---\n\n## ⚠️ 活矛盾表（需在 Wiki 首页维护）")
@@ -421,6 +488,14 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         "补充「相关维基页」关联；或确认是否需要补建摘要页",
     )
 
+    lines.append(f"\n### 12. 错字检查（Gemini 扫描，共 {len(typos)} 条）")
+    if typos:
+        for ty in typos:
+            lines.append(f"- {ty}")
+        lines.append("\n> 建议：在对应页面的标题或摘要中更正错字")
+    else:
+        lines.append("✅ 无（或未配置 GEMINI_API_KEY）")
+
     lines += [
         "",
         "---",
@@ -428,7 +503,15 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         "*由 GitHub Actions 自动生成 · "
         f"scheme: [{cfg['name']}]({cfg['scheme_url']}) · 数据来源 Notion 三库*",
     ]
-    return "\n".join(lines), total_issues, total_wiki
+    # 收集有问题的维基页 URL，用于日志的「关联维基页」关联
+    issue_urls: list[str] = []
+    for row_list in [orphans, outdated, no_summary, contradictions, to_merge, similar, uncertain, incomplete_fields]:
+        for row in row_list:
+            u = row[1] if len(row) > 1 else ""
+            if u and u not in issue_urls:
+                issue_urls.append(u)
+
+    return "\n".join(lines), total_issues, total_wiki, issue_urls[:50]
 
 
 # ── 入口 ───────────────────────────────────────────────────────────────────
@@ -439,7 +522,7 @@ def main() -> None:
 
     for cfg in SCHEMES:
         try:
-            report, total_issues, page_count = run_lint(cfg)
+            report, total_issues, page_count, issue_urls = run_lint(cfg)
         except Exception as e:
             grand_total += 1  # 让 CI 标红，便于发现某套系统复检失败
             reports.append(
@@ -461,6 +544,7 @@ def main() -> None:
                     f"[{cfg['name']}] 扫描 {page_count} 个维基页，发现 {total_issues} 个问题"
                 ),
                 log_db_id=cfg["log_db"],
+                wiki_pages=issue_urls[:30] if issue_urls else None,
             )
         except Exception as e:
             print(
