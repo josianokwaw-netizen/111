@@ -57,6 +57,13 @@ SCHEMES = [
         "source_db": "ec28335c510183d2a1ba01d62798874b",
         "log_db": "da58335c510183eeaaa281337dca11d4",
     },
+    {
+        "name": "投资 scheme",
+        "scheme_url": "https://app.notion.com/p/3878335c510181389db8efd6f92d8def",
+        "wiki_db": "1aaf457a389f439880a18255de0089d9",
+        "source_db": "e4f8d3694ebb49cd9112807ae0517248",
+        "log_db": "5930b1a8fca74a0389d3b7f3eff83195",
+    },
 ]
 
 BJ        = timezone(timedelta(hours=8))
