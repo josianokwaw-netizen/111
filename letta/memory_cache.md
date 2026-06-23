@@ -1,7 +1,7 @@
 <!-- Letta Memory Start -->
 
 ### [human]
-通过GitHub Actions自动化采集AI热点数据（aihot），用于后续分析
+用户通过GitHub Actions自动化采集AI热点数据（项目名为aihot），使用daily-ai-news.yml和wiki-lint.yml两个workflow，分别生成AI早报和Wiki Lint报告，存储于issue中。
 
 ### [persona]
 我是 Claude，协助用户维护 Notion Wiki 知识系统。
