@@ -2,11 +2,12 @@ name: 📦 aihot Data Store
 
 on:
   schedule:
-    - cron: '45 23 * * *'  # 北京时间 07:45（UTC 23:45），daily-ai-news 之前运行
+    - cron: '35 0 * * *'  # 北京时间 08:35（UTC 00:35），daily-ai-news 发完 issue 后运行
   workflow_dispatch:
 
 permissions:
   contents: write
+  issues: read
 
 jobs:
   store:
@@ -14,127 +15,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch aihot data
+      - name: Read latest AI 早报 issue and save
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 aihot-skill/0.2.0"
+          DATE=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
+          TITLE="🌅 AI 早报 · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日')"
 
-          RESP=$(curl -sf -H "User-Agent: $UA" "https://aihot.virxact.com/api/public/daily" || echo "[]")
-          COUNT=$(echo "$RESP" | python3 -c "
-          import json,sys
-          d=json.load(sys.stdin)
-          items=d if isinstance(d,list) else d.get('items',d.get('data',[]))
-          print(len(items))
-          " 2>/dev/null || echo "0")
+          # 按标题搜索今日 issue
+          ISSUE_JSON=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --search "$TITLE" \
+            --json number,title,body,createdAt \
+            --limit 1)
 
-          if [ "$COUNT" = "0" ]; then
-            RESP=$(curl -sf -H "User-Agent: $UA" \
-              "https://aihot.virxact.com/api/public/items?mode=selected&since=1" || echo "[]")
+          BODY=$(echo "$ISSUE_JSON" | python3 -c "
+          import json, sys
+          items = json.load(sys.stdin)
+          if items:
+              print(items[0]['body'])
+          ")
+
+          if [ -z "$BODY" ]; then
+            echo "今日 issue 未找到，跳过。"
+            exit 0
           fi
 
-          echo "$RESP" > /tmp/raw.json
+          mkdir -p data/aihot
 
-      - name: Save data files
-        run: |
-          cat > /tmp/save.py << 'PYEOF'
-          import json, os, sys
-          from datetime import datetime, timezone, timedelta
+          # 保存当日文件
+          echo "$BODY" > "data/aihot/${DATE}.md"
 
-          bj = timezone(timedelta(hours=8))
-          now = datetime.now(bj)
-          date_str = now.strftime('%Y-%m-%d')
+          # 覆盖 latest.md
+          cp "data/aihot/${DATE}.md" data/aihot/latest.md
 
-          with open('/tmp/raw.json') as f:
-              data = json.load(f)
-
-          items = data if isinstance(data, list) else data.get('items', data.get('data', []))
-
-          if not items:
-              print("No items today, skipping.")
-              sys.exit(0)
-
-          # ── 目录 ──────────────────────────────────────────
-          os.makedirs('data/aihot', exist_ok=True)
-
-          # ── JSON 原始数据 ──────────────────────────────────
-          json_path = f'data/aihot/{date_str}.json'
-          payload = {
-              'date': date_str,
-              'fetched_at': now.isoformat(),
-              'count': len(items),
-              'items': items
-          }
-          with open(json_path, 'w', encoding='utf-8') as f:
-              json.dump(payload, f, ensure_ascii=False, indent=2)
-          print(f"Saved JSON: {json_path} ({len(items)} items)")
-
-          # ── Markdown 长上下文格式 ──────────────────────────
-          cat_map = {
-              'model':    '🤖 模型发布',
-              'product':  '📦 产品动态',
-              'industry': '🏭 行业新闻',
-              'paper':    '📄 论文前沿',
-              'tutorial': '💡 实用技巧',
-              'tool':     '🛠️ 工具资讯',
-              'research': '🔬 研究动态',
-          }
-
-          groups = {}
-          for item in items:
-              cat = item.get('category', 'other')
-              label = cat_map.get(cat, '📰 其他')
-              groups.setdefault(label, []).append(item)
-
-          lines = [
-              f'# aihot · {date_str}',
-              f'',
-              f'> 共 {len(items)} 条 · 抓取时间 {now.strftime("%H:%M")} BJ',
-              f'',
-              '---',
-              '',
-          ]
-
-          for label, grp in groups.items():
-              lines.append(f'## {label}')
-              lines.append('')
-              for item in grp:
-                  title   = (item.get('title') or '').strip()
-                  summary = (item.get('summary') or item.get('description') or '').strip()
-                  url     = item.get('url') or item.get('link') or ''
-                  pub     = item.get('published_at') or item.get('created_at') or ''
-                  try:
-                      dt = datetime.fromisoformat(pub.replace('Z', '+00:00'))
-                      t  = dt.astimezone(bj).strftime('%H:%M')
-                  except Exception:
-                      t  = ''
-
-                  lines.append(f'### {title}' + (f'  `{t}`' if t else ''))
-                  if summary:
-                      lines.append(f'')
-                      lines.append(summary)
-                  if url:
-                      lines.append(f'')
-                      lines.append(f'[→ 原文]({url})')
-                  lines.append('')
-
-          lines += ['---', f'*数据来源 aihot.virxact.com · {date_str}*']
-
-          md_path = f'data/aihot/{date_str}.md'
-          with open(md_path, 'w', encoding='utf-8') as f:
-              f.write('\n'.join(lines))
-          print(f"Saved MD:   {md_path}")
-
-          # ── latest 软链接（覆盖写，方便读取最新数据）──────
-          for ext in ('json', 'md'):
-              latest = f'data/aihot/latest.{ext}'
-              src = f'{date_str}.{ext}'
-              # 写 latest 为真实内容副本（Actions 不支持 symlink 跨 commit）
-              import shutil
-              shutil.copy(f'data/aihot/{src}', latest)
-              print(f"Updated:    {latest}")
-          PYEOF
-          python3 /tmp/save.py
+          echo "Saved: data/aihot/${DATE}.md"
 
       - name: Commit and push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -146,12 +65,5 @@ jobs:
           fi
 
           DATE=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
-          COUNT=$(python3 -c "
-          import json
-          with open('data/aihot/latest.json') as f:
-              d = json.load(f)
-          print(d.get('count', 0))
-          " 2>/dev/null || echo "?")
-
-          git commit -m "data(aihot): ${DATE} · ${COUNT} items"
+          git commit -m "data(aihot): ${DATE} issue saved"
           git push origin main
