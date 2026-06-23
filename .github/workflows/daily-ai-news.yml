@@ -118,3 +118,80 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "$TITLE" \
             --body "$BODY"
+
+      - name: Sync to Notion Sources（x scheme 待摄入）
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          pip install -q requests
+          cat > /tmp/notion_sync.py << 'PYEOF'
+          import json, os, sys, requests
+          from datetime import datetime, timezone, timedelta
+
+          token = os.environ.get("NOTION_TOKEN", "")
+          if not token:
+              print("NOTION_TOKEN 未设置，跳过 Notion 同步")
+              sys.exit(0)
+
+          with open('/tmp/news.json') as f:
+              data = json.load(f)
+
+          items = data if isinstance(data, list) else data.get('items', data.get('data', []))
+          if not items:
+              print("今日无新闻，跳过 Notion 同步")
+              sys.exit(0)
+
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Notion-Version": "2022-06-28",
+              "Content-Type": "application/json",
+          }
+
+          SOURCE_DB = "d748335c510182ea885201b572eddef4"  # x scheme 源库
+
+          cat_to_topic = {
+              'model':    '工具方法',
+              'product':  '工具方法',
+              'industry': '宏观趋势',
+              'paper':    '工具方法',
+              'tutorial': '工具方法',
+              'tool':     '工具方法',
+              'research': '工具方法',
+          }
+
+          created, failed = 0, 0
+          for item in items[:12]:
+              title = (item.get('title') or '').strip()
+              if not title:
+                  continue
+              url     = item.get('url') or item.get('link') or ''
+              summary = (item.get('summary') or item.get('description') or '').strip()
+              cat     = item.get('category', 'other')
+              topic   = cat_to_topic.get(cat, '其他')
+
+              props = {
+                  "标题": {"title": [{"text": {"content": title[:200]}}]},
+                  "状态": {"status": {"name": "待摄入"}},
+                  "类型": {"select": {"name": "文章"}},
+                  "主题": {"multi_select": [{"name": topic}]},
+                  "平台": {"select": {"name": "其他"}},
+              }
+              if url:
+                  props["链接"] = {"url": url}
+              if summary:
+                  props["备注"] = {"rich_text": [{"text": {"content": summary[:500]}}]}
+
+              r = requests.post(
+                  "https://api.notion.com/v1/pages",
+                  headers=headers,
+                  json={"parent": {"database_id": SOURCE_DB}, "properties": props},
+              )
+              if r.status_code == 200:
+                  created += 1
+              else:
+                  failed += 1
+                  print(f"  ⚠️ 失败：{title[:40]} — {r.status_code} {r.text[:80]}")
+
+          print(f"✅ 已同步 {created} 条 AI 新闻到 Notion 源库（{failed} 条失败）")
+          PYEOF
+          python3 /tmp/notion_sync.py
