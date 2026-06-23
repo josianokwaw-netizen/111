@@ -1,69 +1,200 @@
-name: 📦 aihot Data Store
+name: 📦 aihot → Notion 源库 同步
 
 on:
   schedule:
-    - cron: '35 0 * * *'  # 北京时间 08:35（UTC 00:35），daily-ai-news 发完 issue 后运行
+    - cron: '35 0 * * *'  # 北京时间 08:35，daily-ai-news 发完 issue 之后运行
   workflow_dispatch:
+    inputs:
+      sync_all:
+        description: '同步所有历史 AI 早报（首次使用时勾选）'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   issues: read
 
 jobs:
-  store:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read latest AI 早报 issue and save
+      - name: Sync AI 早报 issues → Notion 源库
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          SYNC_ALL: ${{ github.event.inputs.sync_all || 'false' }}
+          REPO: ${{ github.repository }}
         run: |
-          DATE=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
-          TITLE="🌅 AI 早报 · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日')"
+          pip install requests -q
+          python3 << 'PYEOF'
+          import os, json, re, requests, subprocess
+          from datetime import datetime, timezone, timedelta
 
-          # 按标题搜索今日 issue
-          ISSUE_JSON=$(gh issue list \
-            --repo "${{ github.repository }}" \
-            --search "$TITLE" \
-            --json number,title,body,createdAt \
-            --limit 1)
+          # ── 配置 ────────────────────────────────────────────────
+          NOTION_TOKEN = os.environ['NOTION_TOKEN']
+          DATABASE_ID  = 'd748335c510182ea885201b572eddef4'
+          SYNC_ALL     = os.environ.get('SYNC_ALL', 'false').lower() == 'true'
+          STATE_FILE   = 'data/aihot/synced_issues.txt'
+          REPO         = os.environ.get('REPO', '')
 
-          BODY=$(echo "$ISSUE_JSON" | python3 -c "
-          import json, sys
-          items = json.load(sys.stdin)
-          if items:
-              print(items[0]['body'])
-          ")
+          bj    = timezone(timedelta(hours=8))
+          today = datetime.now(bj).strftime('%Y-%m-%d')
 
-          if [ -z "$BODY" ]; then
-            echo "今日 issue 未找到，跳过。"
-            exit 0
-          fi
+          notion_headers = {
+              'Authorization': f'Bearer {NOTION_TOKEN}',
+              'Content-Type': 'application/json',
+              'Notion-Version': '2022-06-28',
+          }
 
-          mkdir -p data/aihot
+          # ── 读取已同步记录 ───────────────────────────────────────
+          os.makedirs('data/aihot', exist_ok=True)
+          synced = set()
+          if os.path.exists(STATE_FILE):
+              with open(STATE_FILE) as f:
+                  synced = {l.strip() for l in f if l.strip()}
 
-          # 保存当日文件
-          echo "$BODY" > "data/aihot/${DATE}.md"
+          # ── 拉取 GitHub Issues ───────────────────────────────────
+          result = subprocess.run([
+              'gh', 'issue', 'list',
+              '--repo', REPO,
+              '--search', 'AI 早报 in:title',
+              '--json', 'number,title,body,createdAt,url',
+              '--limit', '100',
+              '--state', 'all',
+          ], capture_output=True, text=True, check=True)
 
-          # 覆盖 latest.md
-          cp "data/aihot/${DATE}.md" data/aihot/latest.md
+          all_issues = json.loads(result.stdout)
+          issues = [i for i in all_issues if '🌅 AI 早报' in i.get('title', '')]
 
-          echo "Saved: data/aihot/${DATE}.md"
+          if SYNC_ALL:
+              to_sync = [i for i in issues if str(i['number']) not in synced]
+          else:
+              to_sync = [i for i in issues
+                         if str(i['number']) not in synced
+                         and i.get('createdAt', '')[:10] == today]
 
-      - name: Commit and push
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          print(f'待同步 {len(to_sync)} 条 / 历史已同步 {len(synced)} 条')
+          if not to_sync:
+              print('无新内容，退出。')
+              exit(0)
+
+          # ── Markdown → Notion blocks ─────────────────────────────
+          def parse_inline(text):
+              """将行内 **bold** 和 [text](url) 转换为 Notion rich_text 数组。"""
+              parts = []
+              pattern = re.compile(r'(\*\*[^*]+?\*\*|\[.+?\]\(.+?\))')
+              for seg in pattern.split(text):
+                  if not seg:
+                      continue
+                  bold_m = re.fullmatch(r'\*\*(.+?)\*\*', seg)
+                  link_m = re.fullmatch(r'\[(.+?)\]\((.+?)\)', seg)
+                  if bold_m:
+                      parts.append({'type': 'text',
+                                    'text': {'content': bold_m.group(1)[:2000]},
+                                    'annotations': {'bold': True}})
+                  elif link_m:
+                      parts.append({'type': 'text',
+                                    'text': {'content': link_m.group(1),
+                                             'link': {'url': link_m.group(2)}}})
+                  elif seg:
+                      parts.append({'type': 'text',
+                                    'text': {'content': seg[:2000]}})
+              return parts or [{'type': 'text', 'text': {'content': text[:2000]}}]
+
+          def md_to_blocks(md_text):
+              blocks = []
+              for line in (md_text or '').split('\n'):
+                  s = line.strip()
+                  if not s:
+                      continue
+                  if s.startswith('# '):
+                      blocks.append({'object': 'block', 'type': 'heading_1',
+                                     'heading_1': {'rich_text': parse_inline(s[2:])}})
+                  elif s.startswith('## '):
+                      blocks.append({'object': 'block', 'type': 'heading_2',
+                                     'heading_2': {'rich_text': parse_inline(s[3:])}})
+                  elif s.startswith('### '):
+                      blocks.append({'object': 'block', 'type': 'heading_3',
+                                     'heading_3': {'rich_text': parse_inline(s[4:])}})
+                  elif s.startswith('> '):
+                      blocks.append({'object': 'block', 'type': 'quote',
+                                     'quote': {'rich_text': parse_inline(s[2:])}})
+                  elif s == '---':
+                      blocks.append({'object': 'block', 'type': 'divider', 'divider': {}})
+                  else:
+                      rt = parse_inline(s)
+                      blocks.append({'object': 'block', 'type': 'paragraph',
+                                     'paragraph': {'rich_text': rt}})
+              return blocks
+
+          # ── 创建 Notion 页面 ─────────────────────────────────────
+          def create_page(issue):
+              title     = issue['title']
+              body      = issue.get('body') or ''
+              issue_url = issue.get('url', '')
+
+              blocks = md_to_blocks(body)
+
+              page_data = {
+                  'parent': {'database_id': DATABASE_ID},
+                  'properties': {
+                      '标题':   {'title': [{'text': {'content': title}}]},
+                      '状态':   {'status': {'name': '待摄入'}},
+                      '类型':   {'select': {'name': '笔记'}},
+                      '主题':   {'multi_select': [{'name': 'AI投资'}, {'name': '宏观趋势'}]},
+                      '平台':   {'select': {'name': '其他'}},
+                      '链接':   {'url': issue_url},
+                      '作者/账号': {'rich_text': [{'text': {'content': 'aihot / GitHub Actions'}}]},
+                  },
+                  'children': blocks[:100],
+              }
+
+              r = requests.post('https://api.notion.com/v1/pages',
+                                headers=notion_headers, json=page_data)
+              if r.status_code not in (200, 201):
+                  print(f'  ERROR #{issue["number"]}: {r.status_code} — {r.text[:300]}')
+                  return False
+
+              page_id = r.json()['id']
+
+              # 超过 100 个 block 分批追加
+              for start in range(100, len(blocks), 100):
+                  chunk = blocks[start:start + 100]
+                  r2 = requests.patch(
+                      f'https://api.notion.com/v1/blocks/{page_id}/children',
+                      headers=notion_headers, json={'children': chunk}
+                  )
+                  if r2.status_code not in (200, 201):
+                      print(f'  WARN block append @ {start}: {r2.status_code}')
+
+              print(f'  ✓ #{issue["number"]}  {issue.get("createdAt","")[:10]}  {title[:40]}')
+              return True
+
+          # ── 主循环 ───────────────────────────────────────────────
+          newly_synced = []
+          for issue in sorted(to_sync, key=lambda x: x.get('createdAt', '')):
+              if create_page(issue):
+                  newly_synced.append(str(issue['number']))
+
+          # ── 持久化同步状态 ───────────────────────────────────────
+          if newly_synced:
+              with open(STATE_FILE, 'a') as f:
+                  f.write('\n'.join(newly_synced) + '\n')
+              print(f'\n完成：{len(newly_synced)} 条已写入 Notion 源库。')
+          else:
+              print('\n本次无成功同步条目。')
+          PYEOF
+
+      - name: Commit sync state
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add data/aihot/
+          git add data/aihot/synced_issues.txt
           if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
+            echo "No state change to commit."
+          else
+            git commit -m "data(aihot): update synced issues state"
+            git push origin main
           fi
-
-          DATE=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
-          git commit -m "data(aihot): ${DATE} issue saved"
-          git push origin main
