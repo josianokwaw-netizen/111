@@ -52,6 +52,8 @@ SCHEMES = [
         "wiki_db": "3cb8335c510183e5839681992705faaa",
         "source_db": "d748335c510182ea885201b572eddef4",
         "log_db": "36a8335c5101826296aa816dd77513f6",
+        # X推文档案库：存储完整原始推文，作为摄入前暂存池
+        "tweet_db": "4b321d0adf604c8bbb443e04c65d9bdb",
     },
     {
         "name": "小咪 scheme",
@@ -348,6 +350,14 @@ def run_lint(cfg: dict) -> tuple[str, int, int, list[str]]:
         source_pages = query_all(cfg["source_db"])
     except Exception as e:
         print(f"⚠️ 源库查询失败：{e}", file=sys.stderr)
+
+    # 同时检查 X推文档案库（仅 x scheme 有此字段）
+    if cfg.get("tweet_db"):
+        try:
+            tweet_pages = query_all(cfg["tweet_db"])
+            source_pages.extend(tweet_pages)
+        except Exception as e:
+            print(f"⚠️ 推文档案库查询失败：{e}", file=sys.stderr)
 
     pending_old: list[tuple]    = []
     orphan_sources: list[tuple] = []
