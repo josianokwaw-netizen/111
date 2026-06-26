@@ -27,7 +27,10 @@ def main():
     if not transcript:
         transcript = f"会话时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
-    # 写入文件
+    # 写入文件前脱敏：移除常见 secret 模式
+    import re
+    transcript = re.sub(r'ntn_[A-Za-z0-9]{20,}', 'ntn_REDACTED', transcript)
+    transcript = re.sub(r'sk-[A-Za-z0-9\-]{30,}', 'sk-REDACTED', transcript)
     TRANSCRIPT_FILE.write_text(transcript, encoding="utf-8")
     print(f"[sync] transcript 已保存 ({len(transcript)} 字)")
 
