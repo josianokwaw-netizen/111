@@ -40,6 +40,8 @@ INGEST_FILE = os.path.join(os.path.dirname(__file__), "..", "letta", "pending_in
 
 def create_page(payload: dict) -> dict:
     r = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=payload)
+    if not r.ok:
+        print(f"  ❌ create_page {r.status_code}: {r.text[:500]}", file=sys.stderr)
     r.raise_for_status()
     return r.json()
 
@@ -50,6 +52,8 @@ def update_page(page_id: str, props: dict) -> dict:
         headers=HEADERS,
         json={"properties": props},
     )
+    if not r.ok:
+        print(f"  ❌ update_page {r.status_code}: {r.text[:500]}", file=sys.stderr)
     r.raise_for_status()
     return r.json()
 
