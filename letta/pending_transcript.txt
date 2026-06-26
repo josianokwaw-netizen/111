@@ -1,1 +1,1 @@
-
+{"session_id":"eec85321-6149-5e5a-822a-d12879bf9cad","transcript_path":"/root/.claude/projects/-home-user-111/eec85321-6149-5e5a-822a-d12879bf9cad.jsonl","cwd":"/home/user/111","permission_mode":"default","effort":{"level":"high"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"请把你的 Notion Integration Token 发给我（格式：`secret_xxx...`），我来配置。","background_tasks":[],"session_crons":[]}
