@@ -138,10 +138,8 @@ def main() -> None:
 
     # ── 1. 创建源记录 ──────────────────────────────────────────────────────
     source_props = {
-        "名称": {"title": [{"text": {"content": title}}]},
+        "标题": {"title": [{"text": {"content": title}}]},
         "状态": {"status": {"name": "已摄入"}},
-        "加入时间": {"date": {"start": today}},
-        "一句话摘要": {"rich_text": [{"text": {"content": summary[:2000]}}]},
     }
     source_page = create_page({
         "parent": {"database_id": SOURCE_DB},
