@@ -71,6 +71,29 @@ def append_blocks(page_id: str, blocks: list) -> None:
         time.sleep(0.3)
 
 
+def get_title_field(db_id: str) -> str:
+    """从 Notion DB schema 动态获取 title 类型字段名。"""
+    r = requests.get(f"https://api.notion.com/v1/databases/{db_id}", headers=HEADERS)
+    r.raise_for_status()
+    for name, prop in r.json().get("properties", {}).items():
+        if prop.get("type") == "title":
+            print(f"  ℹ️  DB {db_id} title 字段: {name!r}")
+            return name
+    raise RuntimeError(f"DB {db_id} 中找不到 title 类型字段")
+
+
+def find_existing_page(db_id: str, title_field: str, title: str) -> str | None:
+    """在数据库中查找同名页，返回 page_id 或 None。"""
+    r = requests.post(
+        f"https://api.notion.com/v1/databases/{db_id}/query",
+        headers=HEADERS,
+        json={"filter": {"property": title_field, "title": {"equals": title}}},
+    )
+    r.raise_for_status()
+    results = r.json().get("results", [])
+    return results[0]["id"] if results else None
+
+
 # ── 块构造器 ─────────────────────────────────────────────────────────────
 
 def h1(text: str) -> dict:
@@ -136,23 +159,33 @@ def main() -> None:
 
     print(f"▶ 摄入：{title}")
 
-    # ── 1. 创建源记录 ──────────────────────────────────────────────────────
-    source_props = {
-        "标题": {"title": [{"text": {"content": title}}]},
-        "状态": {"status": {"name": "已摄入"}},
-    }
-    source_page = create_page({
-        "parent": {"database_id": SOURCE_DB},
-        "properties": source_props,
-    })
-    source_id  = source_page["id"]
-    source_url = source_page.get("url", "")
-    print(f"  ✅ 源库页面创建: {source_url}")
+    # ── 0. 预读 DB 字段名 ──────────────────────────────────────────────────
+    source_title_field = get_title_field(SOURCE_DB)
+    wiki_title_field   = get_title_field(WIKI_DB)
 
-    # 写入原文正文
-    source_blocks = [h1("原文"), divider()] + md_to_blocks(full_text)
-    append_blocks(source_id, source_blocks)
-    print(f"  ✅ 原文写入完成（{len(source_blocks)} 块）")
+    # ── 1. 创建源记录（幂等：同名已存在则复用） ────────────────────────────
+    existing_source_id = find_existing_page(SOURCE_DB, source_title_field, title)
+    if existing_source_id:
+        source_id  = existing_source_id
+        source_url = f"https://www.notion.so/{source_id.replace('-', '')}"
+        print(f"  ♻️  源库页面已存在，复用: {source_url}")
+    else:
+        source_props = {
+            source_title_field: {"title": [{"text": {"content": title}}]},
+            "状态": {"status": {"name": "已摄入"}},
+        }
+        source_page = create_page({
+            "parent": {"database_id": SOURCE_DB},
+            "properties": source_props,
+        })
+        source_id  = source_page["id"]
+        source_url = source_page.get("url", "")
+        print(f"  ✅ 源库页面创建: {source_url}")
+
+        # 写入原文正文
+        source_blocks = [h1("原文"), divider()] + md_to_blocks(full_text)
+        append_blocks(source_id, source_blocks)
+        print(f"  ✅ 原文写入完成（{len(source_blocks)} 块）")
 
     # ── 2. 创建维基页 ──────────────────────────────────────────────────────
     wiki_ids = []
@@ -160,7 +193,7 @@ def main() -> None:
 
     for item in wiki_items:
         wiki_props = {
-            "名称": {"title": [{"text": {"content": item["title"]}}]},
+            wiki_title_field: {"title": [{"text": {"content": item["title"]}}]},
             "页面类型":  {"select": {"name": item["type"]}},
             "一句话摘要": {"rich_text": [{"text": {"content": item["summary"][:2000]}}]},
             "依据源": {"relation": [{"id": source_id}]},
