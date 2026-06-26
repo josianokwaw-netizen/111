@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENSORIA — Intelligent Neuro-Beauty</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#050508;
+  --purple:#a855f7;
+  --pink:#ec4899;
+  --cyan:#06b6d4;
+  --orange:#f97316;
+  --green:#10b981;
+  --white:#f8fafc;
+  --muted:#94a3b8;
+  --border:rgba(255,255,255,0.08);
+  --card:rgba(255,255,255,0.04);
+}
+
+html{scroll-behavior:smooth}
+
+body{
+  background:var(--bg);
+  color:var(--white);
+  font-family:'Inter',sans-serif;
+  overflow-x:hidden;
+  min-height:100vh;
+}
+
+/* ─── Canvas background ─── */
+#bgCanvas{
+  position:fixed;top:0;left:0;
+  width:100%;height:100%;
+  z-index:0;pointer-events:none;
+}
+
+/* ─── Nav ─── */
+nav{
+  position:fixed;top:0;left:0;right:0;
+  z-index:100;
+  padding:20px 56px;
+  display:flex;align-items:center;justify-content:space-between;
+  backdrop-filter:blur(24px);
+  background:rgba(5,5,8,0.55);
+  border-bottom:1px solid var(--border);
+}
+.logo{
+  font-family:'Playfair Display',serif;
+  font-size:20px;font-weight:700;
+  letter-spacing:8px;text-transform:uppercase;
+}
+.logo span{color:var(--purple)}
+nav ul{display:flex;gap:40px;list-style:none}
+nav ul a{
+  color:var(--muted);text-decoration:none;
+  font-size:12px;letter-spacing:1.5px;text-transform:uppercase;
+  transition:color .3s;
+}
+nav ul a:hover{color:var(--white)}
+.nav-btn{
+  padding:10px 26px;
+  background:linear-gradient(135deg,var(--purple),var(--pink));
+  border:none;border-radius:100px;
+  color:#fff;font-size:13px;font-weight:500;
+  cursor:pointer;letter-spacing:.4px;
+  transition:opacity .3s,transform .3s;
+  box-shadow:0 0 24px rgba(168,85,247,.3);
+}
+.nav-btn:hover{opacity:.82;transform:translateY(-1px)}
+
+/* ─── Hero ─── */
+.hero{
+  position:relative;min-height:100vh;
+  display:flex;align-items:center;
+  padding:120px 56px 80px;
+  z-index:1;overflow:hidden;
+}
+.hero-left{
+  flex:0 0 460px;
+  position:relative;z-index:10;
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;
+  font-size:11px;letter-spacing:3.5px;text-transform:uppercase;
+  color:var(--purple);margin-bottom:30px;
+  opacity:0;animation:fadeUp .8s .1s ease forwards;
+}
+.eyebrow::before{
+  content:'';display:block;
+  width:28px;height:1px;background:var(--purple);
+}
+.hero-title{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(44px,5.5vw,72px);
+  font-weight:700;line-height:1.08;
+  margin-bottom:28px;
+  opacity:0;animation:fadeUp .8s .25s ease forwards;
+}
+.hero-title em{
+  font-style:italic;
+  background:linear-gradient(130deg,var(--purple),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero-sub{
+  font-size:16px;line-height:1.75;
+  color:var(--muted);max-width:380px;
+  margin-bottom:46px;
+  opacity:0;animation:fadeUp .8s .4s ease forwards;
+}
+.hero-actions{
+  display:flex;align-items:center;gap:22px;
+  opacity:0;animation:fadeUp .8s .55s ease forwards;
+}
+.btn-primary{
+  padding:17px 40px;
+  background:linear-gradient(135deg,var(--purple),var(--pink));
+  border:none;border-radius:100px;
+  color:#fff;font-size:15px;font-weight:500;
+  cursor:pointer;letter-spacing:.3px;
+  transition:transform .3s,box-shadow .3s;
+  box-shadow:0 0 36px rgba(168,85,247,.35);
+}
+.btn-primary:hover{
+  transform:translateY(-3px);
+  box-shadow:0 0 56px rgba(168,85,247,.55);
+}
+.btn-ghost{
+  display:flex;align-items:center;gap:12px;
+  font-size:14px;color:var(--muted);
+  cursor:pointer;background:none;border:none;
+  transition:color .3s;
+}
+.btn-ghost:hover{color:var(--white)}
+.play-ring{
+  width:46px;height:46px;border-radius:50%;
+  border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;transition:border-color .3s;
+}
+.btn-ghost:hover .play-ring{border-color:rgba(168,85,247,.5)}
+
+/* ─── Hero Visual ─── */
+.hero-visual{
+  position:absolute;right:0;top:0;
+  width:62%;height:100%;
+  perspective:1400px;
+  pointer-events:none;
+}
+
+/* Portrait */
+.portrait-wrap{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-40%,-50%);
+  width:300px;height:400px;
+}
+.portrait-halo{
+  position:absolute;inset:-90px;
+  border-radius:50%;
+  background:conic-gradient(
+    from 0deg,
+    #7c3aed,#db2777,#f97316,#0891b2,#10b981,#7c3aed
+  );
+  filter:blur(70px);
+  opacity:.45;
+  animation:haloSpin 14s linear infinite;
+}
+@keyframes haloSpin{to{transform:rotate(360deg)}}
+
+.portrait-inner{
+  position:relative;width:100%;height:100%;
+  border-radius:22px;overflow:hidden;
+  border:1px solid rgba(168,85,247,.25);
+  box-shadow:0 0 80px rgba(168,85,247,.15),inset 0 0 60px rgba(0,0,0,.6);
+}
+.portrait-base{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%,#1a0533,transparent 65%),
+    radial-gradient(ellipse 100% 50% at 50% 0%,#0c1a40,transparent 60%),
+    linear-gradient(160deg,#0f0517 0%,#1a0533 40%,#0d1f3c 70%,#050508 100%);
+}
+
+/* Stylized face shapes */
+.face-glow{
+  position:absolute;border-radius:50%;
+  mix-blend-mode:screen;
+}
+.fg-1{
+  width:190px;height:240px;
+  top:12%;left:50%;transform:translateX(-50%);
+  background:radial-gradient(ellipse,rgba(236,72,153,.22),transparent 65%);
+}
+.fg-2{
+  width:80px;height:65px;
+  top:20%;left:26%;
+  background:radial-gradient(ellipse,rgba(255,255,255,.55),transparent 60%);
+  filter:blur(5px);
+}
+.fg-3{
+  width:80px;height:65px;
+  top:20%;left:46%;
+  background:radial-gradient(ellipse,rgba(255,255,255,.55),transparent 60%);
+  filter:blur(5px);
+}
+.fg-4{
+  width:160px;height:120px;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(ellipse,rgba(168,85,247,.15),transparent 70%);
+}
+.fg-hair{
+  position:absolute;
+  top:-30px;left:-20px;right:-20px;height:180px;
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 0%,
+      rgba(249,115,22,.3) 0%,
+      rgba(236,72,153,.25) 30%,
+      rgba(99,102,241,.2) 60%,
+      transparent 80%
+    );
+  filter:blur(8px);
+}
+
+/* Scan line */
+.portrait-scan{
+  position:absolute;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  box-shadow:0 0 20px var(--cyan),0 0 40px rgba(6,182,212,.3);
+  animation:scanLine 3.5s ease-in-out infinite;
+}
+@keyframes scanLine{
+  0%{top:15%;opacity:0}
+  8%{opacity:1}
+  92%{opacity:1}
+  100%{top:82%;opacity:0}
+}
+
+/* Data overlay */
+.portrait-data{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:20px 18px;
+  background:linear-gradient(to top,rgba(0,0,0,.92) 60%,transparent);
+}
+.data-label{
+  font-size:9px;letter-spacing:2.5px;
+  text-transform:uppercase;color:var(--cyan);
+  margin-bottom:10px;
+}
+.data-rows{display:flex;flex-direction:column;gap:7px}
+.data-row{
+  display:flex;align-items:center;
+  gap:8px;font-size:9px;color:rgba(255,255,255,.6);
+}
+.track{
+  flex:1;height:2px;
+  background:rgba(255,255,255,.1);
+  border-radius:2px;overflow:hidden;
+}
+.fill{
+  height:100%;border-radius:2px;
+  transform:scaleX(0);transform-origin:left;
+  animation:barFill 1.8s ease forwards;
+}
+.fill-1{
+  width:82%;
+  background:linear-gradient(90deg,#7c3aed,#06b6d4);
+  animation-delay:.6s;
+}
+.fill-2{
+  width:74%;
+  background:linear-gradient(90deg,#ec4899,#f97316);
+  animation-delay:.9s;
+}
+.fill-3{
+  width:91%;
+  background:linear-gradient(90deg,#06b6d4,#10b981);
+  animation-delay:1.2s;
+}
+@keyframes barFill{to{transform:scaleX(1)}}
+
+/* Pulse dots */
+.pdot{
+  position:absolute;
+  width:7px;height:7px;border-radius:50%;
+  box-shadow:0 0 0 0 currentColor;
+  animation:pdotPulse 2s ease-out infinite;
+}
+@keyframes pdotPulse{
+  0%{box-shadow:0 0 0 0 currentColor}
+  70%{box-shadow:0 0 0 14px rgba(0,0,0,0)}
+  100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}
+}
+
+/* ─── Fragment cards ─── */
+.frag{
+  position:absolute;border-radius:14px;
+  overflow:hidden;will-change:transform;
+}
+.frag-inner{
+  width:100%;height:100%;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.1);
+  position:relative;
+}
+.frag-tag{
+  position:absolute;bottom:10px;left:10px;
+  font-size:8px;letter-spacing:1.5px;text-transform:uppercase;
+  color:rgba(255,255,255,.75);
+  background:rgba(0,0,0,.4);backdrop-filter:blur(6px);
+  padding:3px 9px;border-radius:20px;
+}
+
+/* Individual cards */
+.f1{
+  width:148px;height:200px;
+  top:7%;left:5%;
+  transform:rotateZ(-16deg) rotateX(14deg) rotateY(6deg);
+  filter:blur(1px);opacity:.72;
+  animation:fl1 7s ease-in-out infinite;
+}
+.f1 .frag-inner{background:linear-gradient(135deg,#1a0533,#7c3aed 55%,#db2777)}
+.f2{
+  width:118px;height:168px;
+  top:8%;right:10%;
+  transform:rotateZ(13deg) rotateX(-9deg) rotateY(-14deg);
+  opacity:.88;
+  animation:fl2 8.5s ease-in-out infinite .4s;
+}
+.f2 .frag-inner{background:linear-gradient(155deg,#0c1a40,#1d4ed8 50%,#06b6d4)}
+.f3{
+  width:180px;height:110px;
+  top:46%;left:0%;
+  transform:rotateZ(7deg) rotateX(22deg) rotateY(-10deg);
+  filter:blur(2px);opacity:.58;
+  animation:fl3 9s ease-in-out infinite 1s;
+}
+.f3 .frag-inner{background:linear-gradient(120deg,#0d1f3c,#ec4899 50%,#f97316)}
+.f4{
+  width:138px;height:185px;
+  bottom:14%;right:6%;
+  transform:rotateZ(-11deg) rotateX(-16deg) rotateY(12deg);
+  opacity:.82;
+  animation:fl4 7s ease-in-out infinite .2s;
+}
+.f4 .frag-inner{background:linear-gradient(145deg,#1a0533,#9333ea 50%,#0891b2)}
+.f5{
+  width:100px;height:136px;
+  bottom:9%;left:13%;
+  transform:rotateZ(21deg) rotateX(12deg) rotateY(16deg);
+  filter:blur(1.5px);opacity:.62;
+  animation:fl5 8s ease-in-out infinite .8s;
+}
+.f5 .frag-inner{background:linear-gradient(170deg,#0f0517,#6d28d9 50%,#be185d)}
+.f6{
+  width:210px;height:85px;
+  top:74%;right:16%;
+  transform:rotateZ(-4deg) rotateX(-22deg) rotateY(9deg);
+  filter:blur(.5px);opacity:.68;
+  animation:fl6 9s ease-in-out infinite 1.5s;
+}
+.f6 .frag-inner{background:linear-gradient(90deg,#0c1a40,#7c3aed,#ec4899,#f97316)}
+.f7{
+  width:120px;height:160px;
+  top:22%;left:36%;
+  transform:rotateZ(29deg) rotateX(-6deg) rotateY(-22deg);
+  filter:blur(3px);opacity:.38;
+  animation:fl7 10s ease-in-out infinite 2s;
+}
+.f7 .frag-inner{background:linear-gradient(130deg,#1e0a40,#a21caf,#0284c7)}
+.f8{
+  width:85px;height:105px;
+  top:56%;right:36%;
+  transform:rotateZ(-24deg) rotateX(16deg) rotateY(-6deg);
+  filter:blur(2px);opacity:.48;
+  animation:fl8 6.5s ease-in-out infinite .3s;
+}
+.f8 .frag-inner{background:linear-gradient(145deg,#0d1f3c,#06b6d4,#10b981)}
+
+/* Float keyframes */
+@keyframes fl1{0%,100%{transform:rotateZ(-16deg) rotateX(14deg) rotateY(6deg) translateY(0)}50%{transform:rotateZ(-16deg) rotateX(14deg) rotateY(6deg) translateY(-18px)}}
+@keyframes fl2{0%,100%{transform:rotateZ(13deg) rotateX(-9deg) rotateY(-14deg) translateY(0)}50%{transform:rotateZ(13deg) rotateX(-9deg) rotateY(-14deg) translateY(15px)}}
+@keyframes fl3{0%,100%{transform:rotateZ(7deg) rotateX(22deg) rotateY(-10deg) translateY(0)}50%{transform:rotateZ(7deg) rotateX(22deg) rotateY(-10deg) translateY(-12px)}}
+@keyframes fl4{0%,100%{transform:rotateZ(-11deg) rotateX(-16deg) rotateY(12deg) translateY(0)}50%{transform:rotateZ(-11deg) rotateX(-16deg) rotateY(12deg) translateY(-22px)}}
+@keyframes fl5{0%,100%{transform:rotateZ(21deg) rotateX(12deg) rotateY(16deg) translateY(0)}50%{transform:rotateZ(21deg) rotateX(12deg) rotateY(16deg) translateY(17px)}}
+@keyframes fl6{0%,100%{transform:rotateZ(-4deg) rotateX(-22deg) rotateY(9deg) translateY(0)}50%{transform:rotateZ(-4deg) rotateX(-22deg) rotateY(9deg) translateY(-10px)}}
+@keyframes fl7{0%,100%{transform:rotateZ(29deg) rotateX(-6deg) rotateY(-22deg) translateY(0)}50%{transform:rotateZ(29deg) rotateX(-6deg) rotateY(-22deg) translateY(24px)}}
+@keyframes fl8{0%,100%{transform:rotateZ(-24deg) rotateX(16deg) rotateY(-6deg) translateY(0)}50%{transform:rotateZ(-24deg) rotateX(16deg) rotateY(-6deg) translateY(-15px)}}
+
+/* Year badge */
+.year-badge{
+  position:absolute;top:28%;right:4%;
+  writing-mode:vertical-rl;
+  font-family:'Playfair Display',serif;
+  font-size:10px;letter-spacing:5px;
+  color:rgba(255,255,255,.15);text-transform:uppercase;
+}
+
+/* ─── Stats bar ─── */
+.stats-bar{
+  position:relative;z-index:1;
+  display:flex;justify-content:center;gap:80px;
+  padding:64px 56px;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  background:rgba(255,255,255,.018);
+}
+.stat-item{text-align:center}
+.stat-num{
+  font-family:'Playfair Display',serif;
+  font-size:44px;font-weight:700;
+  background:linear-gradient(130deg,var(--purple),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.stat-lbl{
+  font-size:11px;letter-spacing:2.5px;
+  text-transform:uppercase;color:var(--muted);
+  margin-top:8px;
+}
+
+/* ─── Section base ─── */
+.section{
+  position:relative;z-index:1;
+  padding:120px 56px;
+  max-width:1200px;margin:0 auto;
+}
+.sec-label{
+  font-size:10px;letter-spacing:4px;
+  text-transform:uppercase;color:var(--purple);
+  margin-bottom:18px;
+}
+.sec-title{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(30px,4vw,52px);font-weight:700;
+  margin-bottom:64px;max-width:520px;line-height:1.15;
+}
+
+/* ─── Features grid ─── */
+.feat-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:24px;
+}
+.feat-card{
+  padding:38px 32px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:24px;
+  transition:border-color .3s,background .3s,transform .3s;
+  backdrop-filter:blur(10px);
+}
+.feat-card:hover{
+  border-color:rgba(168,85,247,.4);
+  background:rgba(168,85,247,.06);
+  transform:translateY(-5px);
+}
+.feat-icon{
+  width:52px;height:52px;border-radius:16px;
+  margin-bottom:26px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;
+}
+.ic-p{background:rgba(168,85,247,.14)}
+.ic-k{background:rgba(236,72,153,.14)}
+.ic-c{background:rgba(6,182,212,.14)}
+.feat-title{
+  font-family:'Playfair Display',serif;
+  font-size:21px;margin-bottom:14px;
+}
+.feat-desc{font-size:14px;line-height:1.78;color:var(--muted)}
+
+/* ─── Steps ─── */
+.how-wrap{
+  position:relative;z-index:1;
+  padding:120px 56px;
+  background:rgba(255,255,255,.015);
+  border-top:1px solid var(--border);
+}
+.how-inner{max-width:1200px;margin:0 auto}
+.steps-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:32px;margin-top:64px;
+}
+.step-card{position:relative;padding-right:16px}
+.step-num{
+  font-family:'Playfair Display',serif;
+  font-size:78px;font-weight:700;
+  color:rgba(168,85,247,.07);
+  line-height:1;margin-bottom:16px;
+}
+.step-title{font-size:16px;font-weight:600;margin-bottom:12px}
+.step-desc{font-size:13px;line-height:1.78;color:var(--muted)}
+.step-line{
+  position:absolute;top:38px;right:-8px;
+  width:28px;height:1px;
+  background:linear-gradient(90deg,var(--purple),transparent);
+}
+
+/* ─── CTA ─── */
+.cta-wrap{
+  position:relative;z-index:1;
+  padding:140px 56px;text-align:center;
+  overflow:hidden;
+}
+.cta-glow{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 70% 80% at 50% 50%,rgba(168,85,247,.07),transparent 70%);
+}
+.cta-title{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(38px,5vw,66px);font-weight:700;
+  margin-bottom:22px;
+}
+.cta-title em{
+  font-style:italic;
+  background:linear-gradient(130deg,var(--purple),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.cta-sub{
+  font-size:17px;color:var(--muted);
+  margin-bottom:50px;
+  max-width:480px;margin-left:auto;margin-right:auto;
+  line-height:1.7;
+}
+
+/* ─── Footer ─── */
+footer{
+  position:relative;z-index:1;
+  padding:48px 56px;
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.foot-logo{
+  font-family:'Playfair Display',serif;
+  font-size:17px;font-weight:700;
+  letter-spacing:7px;text-transform:uppercase;
+  color:rgba(255,255,255,.25);
+}
+.foot-copy{font-size:11px;color:rgba(255,255,255,.18);letter-spacing:1px}
+
+/* ─── Entry animations ─── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(28px)}
+  to{opacity:1;transform:translateY(0)}
+}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<!-- ══ Nav ══ -->
+<nav>
+  <div class="logo">SENSOR<span>I</span>A</div>
+  <ul>
+    <li><a href="#">Technology</a></li>
+    <li><a href="#">Science</a></li>
+    <li><a href="#">Journal</a></li>
+    <li><a href="#">About</a></li>
+  </ul>
+  <button class="nav-btn">Early Access</button>
+</nav>
+
+<!-- ══ Hero ══ -->
+<section class="hero">
+  <div class="hero-left">
+    <div class="eyebrow">Intelligent Neuro-Beauty</div>
+    <h1 class="hero-title">
+      Your Skin,<br>
+      <em>Reimagined</em><br>
+      by Intelligence
+    </h1>
+    <p class="hero-sub">
+      No more skin guessing. No more random products.
+      Just a smart AI tool that helps your natural beauty shine.
+    </p>
+    <div class="hero-actions">
+      <button class="btn-primary">Start Your Analysis</button>
+      <button class="btn-ghost">
+        <div class="play-ring">&#9654;</div>
+        See it work
+      </button>
+    </div>
+  </div>
+
+  <div class="hero-visual" id="heroVisual">
+
+    <!-- Fragment cards -->
+    <div class="frag f1"><div class="frag-inner"><span class="frag-tag">Hydration</span></div></div>
+    <div class="frag f2"><div class="frag-inner"><span class="frag-tag">Analysis</span></div></div>
+    <div class="frag f3"><div class="frag-inner"><span class="frag-tag">Texture</span></div></div>
+    <div class="frag f4"><div class="frag-inner"><span class="frag-tag">Glow Index</span></div></div>
+    <div class="frag f5"><div class="frag-inner"><span class="frag-tag">UV Map</span></div></div>
+    <div class="frag f6"><div class="frag-inner"><span class="frag-tag">Pigmentation</span></div></div>
+    <div class="frag f7"><div class="frag-inner"><span class="frag-tag">Neural</span></div></div>
+    <div class="frag f8"><div class="frag-inner"><span class="frag-tag">Deep Layer</span></div></div>
+
+    <!-- Portrait -->
+    <div class="portrait-wrap">
+      <div class="portrait-halo"></div>
+      <div class="portrait-inner">
+        <div class="portrait-base"></div>
+        <div class="fg-hair"></div>
+        <div class="face-glow fg-1"></div>
+        <div class="face-glow fg-2"></div>
+        <div class="face-glow fg-3"></div>
+        <div class="face-glow fg-4"></div>
+        <div class="portrait-scan"></div>
+
+        <!-- Pulse dots -->
+        <div class="pdot" style="top:28%;left:32%;background:var(--purple);color:rgba(168,85,247,.4)"></div>
+        <div class="pdot" style="top:33%;left:60%;background:var(--cyan);color:rgba(6,182,212,.4);animation-delay:.9s"></div>
+        <div class="pdot" style="top:55%;left:45%;background:var(--pink);color:rgba(236,72,153,.4);animation-delay:1.6s"></div>
+
+        <!-- Data overlay -->
+        <div class="portrait-data">
+          <div class="data-label">Live Skin Analysis</div>
+          <div class="data-rows">
+            <div class="data-row">
+              <span>Moisture</span>
+              <div class="track"><div class="fill fill-1"></div></div>
+              <span>82%</span>
+            </div>
+            <div class="data-row">
+              <span>Radiance</span>
+              <div class="track"><div class="fill fill-2"></div></div>
+              <span>74%</span>
+            </div>
+            <div class="data-row">
+              <span>Clarity</span>
+              <div class="track"><div class="fill fill-3"></div></div>
+              <span>91%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="year-badge">© 2026 &nbsp; Sensoria Labs</div>
+  </div>
+</section>
+
+<!-- ══ Stats ══ -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-num">2.4M</div>
+    <div class="stat-lbl">Skin Profiles</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">98.7%</div>
+    <div class="stat-lbl">Accuracy Rate</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">340+</div>
+    <div class="stat-lbl">Biomarkers</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">&lt;&nbsp;3s</div>
+    <div class="stat-lbl">Analysis Time</div>
+  </div>
+</div>
+
+<!-- ══ Features ══ -->
+<div class="section">
+  <div class="sec-label">Core Technology</div>
+  <h2 class="sec-title">Intelligence meets<br>your biology</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-icon ic-p">◈</div>
+      <h3 class="feat-title">Neural Skin Mapping</h3>
+      <p class="feat-desc">Deep learning models trained on 50M+ skin samples identify 340+ biomarkers in under 3 seconds with clinical-grade precision.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon ic-k">⬡</div>
+      <h3 class="feat-title">Personalized Formulation</h3>
+      <p class="feat-desc">Your unique skin profile generates a molecular-level formula matched precisely to your biology, climate, and lifestyle patterns.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon ic-c">◎</div>
+      <h3 class="feat-title">Live Adaptation</h3>
+      <p class="feat-desc">The AI re-calibrates with seasonal shifts, stress markers, and real-time environmental data — your formula evolves with you.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══ How it works ══ -->
+<div class="how-wrap">
+  <div class="how-inner">
+    <div class="sec-label">Process</div>
+    <h2 class="sec-title">How the intelligence<br>works</h2>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <h4 class="step-title">Capture</h4>
+        <p class="step-desc">Point your phone camera at your face for a 3-second neural scan in natural light.</p>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <h4 class="step-title">Analyze</h4>
+        <p class="step-desc">Our model maps 340+ biomarkers across hydration, pigmentation, elasticity, and texture layers.</p>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <h4 class="step-title">Formulate</h4>
+        <p class="step-desc">A proprietary algorithm generates your unique neuro-beauty formula — precise to the molecule.</p>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <h4 class="step-title">Evolve</h4>
+        <p class="step-desc">Monthly re-scans track progress and adapt your formula as your skin and life change.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CTA ══ -->
+<div class="cta-wrap">
+  <div class="cta-glow"></div>
+  <h2 class="cta-title">Begin your<br><em>transformation</em></h2>
+  <p class="cta-sub">
+    Join 2.4 million people who've unlocked their skin's true potential with intelligence.
+  </p>
+  <button class="btn-primary" style="font-size:16px;padding:18px 46px">
+    Start Free Analysis
+  </button>
+</div>
+
+<!-- ══ Footer ══ -->
+<footer>
+  <div class="foot-logo">Sensoria</div>
+  <div class="foot-copy">© 2026 Sensoria Labs &nbsp;·&nbsp; Intelligent Neuro-Beauty</div>
+</footer>
+
+<script>
+/* ── Canvas: Waves + Particles ── */
+const cv = document.getElementById('bgCanvas');
+const cx = cv.getContext('2d');
+let W, H, T = 0;
+
+function resize(){
+  W = cv.width = window.innerWidth;
+  H = cv.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const WAVES = [
+  {c:'rgba(139,92,246,.13)', s:.22, a:65,  f:.0038, p:0},
+  {c:'rgba(236,72,153,.09)', s:.38, a:48,  f:.0055, p:2.1},
+  {c:'rgba(6,182,212,.07)',  s:.28, a:88,  f:.0028, p:4.4},
+  {c:'rgba(249,115,22,.05)', s:.45, a:35,  f:.0072, p:1.7},
+];
+
+const PARTICLES = Array.from({length:70}, () => ({
+  x: Math.random() * 2000,
+  y: Math.random() * 2000,
+  r: Math.random() * 1.4 + 0.2,
+  vx: (Math.random()-.5) * .28,
+  vy: (Math.random()-.5) * .28,
+  h: [270,320,195,30][Math.floor(Math.random()*4)],
+  a: Math.random() * .5 + .2,
+}));
+
+function frame(){
+  cx.clearRect(0, 0, W, H);
+
+  /* waves */
+  WAVES.forEach(w => {
+    cx.beginPath();
+    for(let x = 0; x <= W; x++){
+      const y = H*.54
+        + Math.sin(x*w.f + T*w.s + w.p) * w.a
+        + Math.sin(x*w.f*2.3 + T*w.s*1.6 + w.p) * (w.a*.38);
+      x===0 ? cx.moveTo(x,y) : cx.lineTo(x,y);
+    }
+    cx.lineTo(W,H); cx.lineTo(0,H); cx.closePath();
+    cx.fillStyle = w.c;
+    cx.fill();
+  });
+
+  /* particles */
+  PARTICLES.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if(p.x<0) p.x=W; if(p.x>W) p.x=0;
+    if(p.y<0) p.y=H; if(p.y>H) p.y=0;
+    cx.beginPath();
+    cx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    cx.fillStyle = `hsla(${p.h},75%,70%,${p.a})`;
+    cx.fill();
+  });
+
+  T += .012;
+  requestAnimationFrame(frame);
+}
+frame();
+
+/* ── Mouse parallax ── */
+const vis = document.getElementById('heroVisual');
+let mx=0, my=0, cx2=0, cy2=0;
+
+document.addEventListener('mousemove', e => {
+  mx = (e.clientX/innerWidth  - .5) * 2;
+  my = (e.clientY/innerHeight - .5) * 2;
+});
+
+(function parallax(){
+  cx2 += (mx - cx2) * .055;
+  cy2 += (my - cy2) * .055;
+  if(vis) vis.style.transform =
+    `translateX(${cx2*-14}px) translateY(${cy2*-9}px)`;
+  requestAnimationFrame(parallax);
+})();
+
+/* ── Scroll fade-in ── */
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if(e.isIntersecting){
+      e.target.style.opacity = '1';
+      e.target.style.transform = 'translateY(0)';
+      io.unobserve(e.target);
+    }
+  });
+}, {threshold:.12});
+
+document.querySelectorAll(
+  '.feat-card,.step-card,.stat-item,.sec-title,.sec-label,.cta-title,.cta-sub'
+).forEach(el => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(30px)';
+  el.style.transition = 'opacity .75s ease, transform .75s ease';
+  io.observe(el);
+});
+
+/* stagger feature + step cards */
+document.querySelectorAll('.feat-card,.step-card,.stat-item').forEach((el,i) => {
+  el.style.transitionDelay = `${i*.1}s`;
+});
+</script>
+</body>
+</html>
