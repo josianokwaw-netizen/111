@@ -1,4 +1,7 @@
 {
+  "enabledMcpjsonServers": [
+    "notion"
+  ],
   "env": {
     "LETTA_API_KEY": "sk-let-ZGRjNWEzZmYtMjRjNS00ZWNlLThmOTgtNThiMGY3YmRkYzFmOjZmYmE4YjI5LTdkYTgtNDgzYS05OTk1LTk5NWY0NzIwNzhhOA=="
   },
@@ -9,7 +12,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/user/111 && python letta/letta_memory.py --read-cache 2>/dev/null || echo '<!-- Letta Memory: 缓存文件不存在 -->'"
+            "command": "python letta/letta_memory.py --read-cache 2>/dev/null || echo '<!-- Letta Memory: 缓存文件不存在 -->'"
           }
         ]
       }
