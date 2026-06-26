@@ -1,0 +1,139 @@
+name: 📥 Notion Import Articles
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '仅打印不写入 Notion'
+        type: boolean
+        default: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Import articles to Notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          cat > /tmp/import_articles.py << 'PYEOF'
+          import os, sys, json, requests
+          from datetime import datetime, timezone, timedelta
+
+          TOKEN = os.environ["NOTION_TOKEN"]
+          DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
+          SOURCE_DB = "d748335c510182ea885201b572eddef4"
+          LOG_DB    = "36a8335c5101826296aa816dd77513f6"
+          BJ        = timezone(timedelta(hours=8))
+          TODAY     = datetime.now(BJ).strftime("%Y-%m-%d")
+
+          HEADERS = {
+              "Authorization": f"Bearer {TOKEN}",
+              "Notion-Version": "2022-06-28",
+              "Content-Type": "application/json",
+          }
+
+          def create_source(title, summary, content_blocks):
+              if DRY_RUN:
+                  print(f"[DRY] 将创建源页: {title}")
+                  return "dry-run-id", "https://notion.so/dry-run"
+              props = {
+                  "名称": {"title": [{"text": {"content": title}}]},
+                  "状态": {"select": {"name": "已摄入"}},
+                  "加入日期": {"date": {"start": TODAY}},
+                  "一句话摘要": {"rich_text": [{"text": {"content": summary[:2000]}}]},
+              }
+              payload = {"parent": {"database_id": SOURCE_DB}, "properties": props, "children": content_blocks}
+              r = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=payload)
+              r.raise_for_status()
+              page = r.json()
+              print(f"✅ 源页创建: {title}")
+              print(f"   URL: {page['url']}")
+              return page["id"], page["url"]
+
+          def write_log(op, title, detail, source_ids=None):
+              if DRY_RUN:
+                  print(f"[DRY] 日志: [{op}] {title}")
+                  return
+              props = {
+                  "条目": {"title": [{"text": {"content": f"[{op}] {title}"}}]},
+                  "操作": {"select": {"name": op}},
+                  "日期": {"date": {"start": TODAY}},
+                  "详情": {"rich_text": [{"text": {"content": detail[:2000]}}]},
+              }
+              if source_ids:
+                  props["相关源"] = {"relation": [{"id": sid} for sid in source_ids if sid != "dry-run-id"]}
+              payload = {"parent": {"database_id": LOG_DB}, "properties": props}
+              r = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=payload)
+              r.raise_for_status()
+              print(f"✅ 日志写入: [{op}] {title}")
+
+          # ── 文章1：小红书低粉高转化 ──────────────────────────────
+          blocks1 = [
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"核心观点"}}]}},
+              {"object":"block","type":"paragraph","paragraph":{"rich_text":[{"text":{"content":"小红书低粉账号（3000粉以下）通过「被搜到→能转化→服务好」三件事闭环，实现千万销售额。神气小鹿：1674粉卖600万，累计5.8万件，好评99.7%。两年后粉丝仅涨2000，但累计售出已超1160万。"}}]}},
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"三大核心方法"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"被搜到：700篇笔记围绕「失眠/护颈枕/助眠/送礼」等关键词，让精准搜索用户必然撞到"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"能转化：来访者已有购买意图（搜索流量），逐一消除顾虑（33天试睡/退货包运费/买2赠品）"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"服务好：6小时发货/24秒客服回复/差评当产品说明书改进→好评99.7%→平台权重提升飞轮"}}]}},
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"两条变现路径"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"货架式（新手首选）：笔记即货架，靠搜索SEO驱动，不需人设，主打铺量（每天2-6篇）"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"信任式（进阶）：买手直播，靠私域+审美+铁粉，7-8成成交来自老粉，门槛高但天花板高"}}]}},
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"平台特性与选品逻辑"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"月活3.5亿，每月1.7亿人主动搜索，「求链接」评论8000万条/月 → 搜索红利大于粉丝红利"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"用户消费力强，退货率低（服装约5-6成 vs 其他平台8成），高客单有利润空间"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"AI全网比价机制：引流款压价打开流量，利润款赚真钱（组合拳）"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"大赛道找细分：「租房卧室收纳」优于「家居好物」，供需短暂失衡处即红利"}}]}},
+          ]
+
+          # ── 文章2：美中AI竞争分析 ─────────────────────────────────
+          blocks2 = [
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"核心观点"}}]}},
+              {"object":"block","type":"paragraph","paragraph":{"rich_text":[{"text":{"content":"UBS报告验证：美国初创公司大量转向DeepSeek（成本驱动），形成资本主义悖论。Anthropic Mythos被蒸馏+安全系统被攻破，前沿模型优势窗口正在快速收窄。"}}]}},
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"三大核心矛盾"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"成本悖论：DeepSeek远比GPT/Claude/Gemini推理模型便宜 → 美国企业为成本选中国模型"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"蒸馏困境：前沿模型被竞争对手蒸馏后，技术优势持续时间约4个月（Epoch报告）"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"监管缺口：AI访问如同开放银行账户却无身份验证，假账号/共享密钥问题严重"}}]}},
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"作者建议的解决路径"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"KYC级认证：前沿模型访问需生物识别（Face ID+Persona），创建密钥前必须实名"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"短效访问密钥：OAuth scope限制，短生命周期，防止密钥池共享"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"联邦立法：共享AI访问权限类比身份伪造，纳入法规"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"分级出口管制：盟友优先，确保美国始终在技术前沿"}}]}},
+              {"object":"block","type":"numbered_list_item","numbered_list_item":{"rich_text":[{"text":{"content":"极致推理优化：通过算法和工程让美国模型在便宜推理上超越DeepSeek"}}]}},
+              {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"text":{"content":"与AI早报的交叉验证"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"NSA局长确认Mythos数小时内攻破其机密系统（2026/6/22早报）"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"Trump政府已暂停Fable/Mythos出口（2026/6/22早报）"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"微软同时转售GPT和DeepSeek成全球最大AI中间商（2026/6/21早报）"}}]}},
+              {"object":"block","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"text":{"content":"开源模型落后前沿仅4个月（Epoch报告，2026/6/20早报）"}}]}},
+          ]
+
+          id1, url1 = create_source(
+              "小红书低粉高转化：2000粉卖出1160万的底层逻辑",
+              "小红书不靠粉丝数赚钱，靠「被搜到→能转化→服务好」三件事闭环。货架式（SEO铺量）vs信任式（买手私域）两条路径，平台月活3.5亿搜索流量超50%，低粉可直接接住举着钱找链接的用户。",
+              blocks1
+          )
+
+          id2, url2 = create_source(
+              "美中AI竞争：DeepSeek蚕食美国市场与前沿模型安全困境",
+              "UBS报告验证：美国初创公司大量使用DeepSeek（成本驱动），形成悖论。Mythos被蒸馏、安全系统被攻破，作者提议KYC级认证+立法+极致推理优化是出路。",
+              blocks2
+          )
+
+          write_log(
+              op="摄入",
+              title="小红书低粉变现 + 美中AI竞争分析",
+              detail="摄入两篇文章：(1)小红书低粉高转化底层逻辑（货架式/信任式路径，神气小鹿案例）；(2)美中AI竞争—DeepSeek蚕食美国市场与前沿模型安全困境（UBS报告视角）",
+              source_ids=[id1, id2]
+          )
+
+          print("\n=== 导入完成 ===")
+          print(f"文章1: {url1}")
+          print(f"文章2: {url2}")
+          PYEOF
+          python3 /tmp/import_articles.py
