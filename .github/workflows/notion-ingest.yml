@@ -1,0 +1,21 @@
+name: Notion Ingest Article
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/notion-mcp-integration-qgbpjp
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install requests
+      - name: Run ingest
+        run: python wiki_lint/ingest_article.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
