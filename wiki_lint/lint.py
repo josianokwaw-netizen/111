@@ -21,6 +21,8 @@ Lint复检清单（完全按 scheme 约定）：
   ── 源库层 ──
   9. 长期待摄入  — 状态=待摄入 且 加入超过7天
   10. 孤儿源    — 状态=已摄入 但无「相关维基页」关联
+  ── 错字层 ──
+  11. 错字页    — Gemini 扫描标题+摘要+正文，找中文错别字（需 GEMINI_API_KEY）
 
 仅报告，不自动改写 Notion 状态。请按报告建议手动处理。
 写入日志：完成后往各自 scheme 的 Notion 日志库写一条「复检」记录。
@@ -223,6 +225,104 @@ def find_missing_concepts(pages: list[dict]) -> list[str]:
         return [f"（Gemini 分析失败：{e}）"]
 
 
+# ── 错字检查：抓正文 + Gemini 找错别字（可选） ────────────────────────────
+
+def fetch_page_text(page_id: str, max_chars: int = 1500) -> str:
+    """抓取页面正文纯文本（best-effort，递归一层子块，含表格单元格）。"""
+    out: list[str] = []
+
+    def total() -> int:
+        return sum(len(x) for x in out)
+
+    def walk(block_id: str, depth: int) -> None:
+        if depth > 3 or total() > max_chars:
+            return
+        cursor = None
+        while True:
+            params: dict = {"page_size": 100}
+            if cursor:
+                params["start_cursor"] = cursor
+            try:
+                r = requests.get(
+                    f"https://api.notion.com/v1/blocks/{block_id}/children",
+                    headers=NOTION_HEADERS,
+                    params=params,
+                )
+                r.raise_for_status()
+            except Exception:
+                return
+            data = r.json()
+            for b in data.get("results", []):
+                bt = b.get("type", "")
+                payload = b.get(bt, {})
+                for rt in payload.get("rich_text", []):
+                    out.append(rt.get("plain_text", ""))
+                # 表格行的文字藏在 cells 里
+                if bt == "table_row":
+                    for cell in payload.get("cells", []):
+                        for rt in cell:
+                            out.append(rt.get("plain_text", ""))
+                if b.get("has_children"):
+                    walk(b["id"], depth + 1)
+                if total() > max_chars:
+                    return
+            if not data.get("has_more"):
+                break
+            cursor = data["next_cursor"]
+
+    walk(page_id, 0)
+    return "".join(out)[:max_chars]
+
+
+def find_typos(entries: list[tuple[str, str, str]]) -> list[tuple]:
+    """entries: [(标题, url, 待检文本)]，返回 [(标题, url, '错→正；错→正')]。"""
+    if not GEMINI_API_KEY or not entries:
+        return []
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        return [("（错字检查初始化失败）", "", str(e))]
+
+    results: list[tuple] = []
+    BATCH = 12
+    for i in range(0, len(entries), BATCH):
+        chunk = entries[i:i + BATCH]
+        numbered = []
+        for idx, (t, _u, txt) in enumerate(chunk):
+            body = f"{t}。{txt}".replace("\n", " ")[:1200]
+            numbered.append(f"[{idx}] {body}")
+        prompt = (
+            "下面每行是一个条目，格式 [序号] 文本（中文知识库的标题+正文）。\n"
+            "请只挑出**明显的中文错别字 / 同音异形错字 / 多余乱码字**，"
+            "不要纠正风格、标点、繁简、专有名词或英文。\n"
+            "对每个含错字的条目输出一行，格式：`序号|错字→正字；错字→正字`；"
+            "没有错字的条目不要输出。不要解释、不要多余文字。\n\n"
+            + "\n".join(numbered)
+        )
+        try:
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt,
+            )
+            for ln in resp.text.strip().splitlines():
+                ln = ln.strip()
+                if "|" not in ln or "→" not in ln:
+                    continue
+                pre, corr = ln.split("|", 1)
+                try:
+                    k = int(pre.strip().strip("[]"))
+                except ValueError:
+                    continue
+                if 0 <= k < len(chunk):
+                    t, u, _ = chunk[k]
+                    results.append((t, u, corr.strip()))
+        except Exception as e:
+            results.append((f"（批次 {i // BATCH} 分析失败）", "", str(e)))
+    return results
+
+
 # ── 主检查逻辑 ────────────────────────────────────────────────────────────
 
 def run_lint(cfg: dict) -> tuple[str, int, int, int]:
@@ -307,13 +407,25 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         if st == "已摄入" and not has_wk:
             orphan_sources.append((t_s, url_s, "已摄入但无关联维基页"))
 
+    # 11. 错字检查（仅在配置 Gemini 时抓正文并送检，避免无谓的 API 调用）
+    typos: list[tuple] = []
+    if GEMINI_API_KEY:
+        typo_entries: list[tuple[str, str, str]] = []
+        for p in wiki_pages:
+            txt = f"{text_of(p, '一句话摘要')} {fetch_page_text(p['id'])}"
+            typo_entries.append((title_of(p), p.get("url", ""), txt))
+        for s in source_pages:
+            txt = f"{text_of(s, '备注')} {fetch_page_text(s['id'])}"
+            typo_entries.append((title_of(s), s.get("url", ""), txt))
+        typos = find_typos(typo_entries)
+
     # ── 构建报告 ─────────────────────────────────────────────────────────
     total_wiki_issues = (
         len(orphans) + len(outdated) + len(no_summary)
         + len(contradictions) + len(to_merge) + len(similar) + len(uncertain)
     )
     total_source_issues = len(pending_old) + len(orphan_sources)
-    total_issues = total_wiki_issues + total_source_issues
+    total_issues = total_wiki_issues + total_source_issues + len(typos)
 
     lines = [
         f"# 🔍 {cfg['name']} · Lint 报告 · {NOW.strftime('%Y年%m月%d日')}",
@@ -420,6 +532,25 @@ def run_lint(cfg: dict) -> tuple[str, int, int, int]:
         orphan_sources,
         "补充「相关维基页」关联；或确认是否需要补建摘要页",
     )
+
+    lines += [
+        "",
+        "---",
+        "",
+        "## ✏️ 错字层检查",
+    ]
+    if not GEMINI_API_KEY:
+        lines.append("\n### 11. 错字页（Gemini 扫描标题+摘要+正文）")
+        lines.append("⏭️ 跳过（未配置 GEMINI_API_KEY）")
+    else:
+        lines.append(f"\n### 11. 错字页（Gemini 扫描标题+摘要+正文）（{len(typos)} 个）")
+        if typos:
+            for name, url, corr in typos:
+                link = f"[{name}]({url})" if url else name
+                lines.append(f"- {link} — {corr}")
+            lines.append("\n> 建议：在 Notion 逐处订正错别字；专有名词/英文误报可忽略")
+        else:
+            lines.append("✅ 无")
 
     lines += [
         "",
