@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "sensoria-landing.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/sensoria-landing.html" }
+  ]
+}
