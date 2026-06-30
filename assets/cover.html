@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Wiki LM 封面</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#e9eef5; }
+  /* 小红书标准 3:4 竖图：1080 x 1440 */
+  .card{
+    width:1080px; height:1440px; position:relative; overflow:hidden;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(255,255,255,.55), transparent 60%),
+      linear-gradient(155deg, #fff4e6 0%, #ffe9d6 32%, #ffd9c2 64%, #ffc9b4 100%);
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    color:#2b2118;
+  }
+  /* 顶部小标签 */
+  .kicker{
+    position:absolute; top:96px; left:88px;
+    display:inline-flex; align-items:center; gap:14px;
+    background:#2b2118; color:#fff; font-size:34px; font-weight:700;
+    padding:18px 34px; border-radius:999px; letter-spacing:1px;
+  }
+  .kicker .dot{ width:18px;height:18px;border-radius:50%;background:#ff7a45;display:inline-block;}
+  /* 主标题 */
+  .headline{
+    position:absolute; top:300px; left:84px; right:84px;
+  }
+  .headline .strike{
+    font-size:64px; font-weight:800; color:#a08a76;
+    text-decoration:line-through; text-decoration-thickness:6px;
+    text-decoration-color:#ff7a45; margin-bottom:20px; display:inline-block;
+  }
+  .headline h1{
+    font-size:128px; line-height:1.18; font-weight:900; letter-spacing:-1px;
+  }
+  .headline h1 .hl{
+    color:#ff5a1f; position:relative; white-space:nowrap;
+  }
+  .headline h1 .hl::after{
+    content:""; position:absolute; left:-4px; right:-4px; bottom:8px; height:26px;
+    background:rgba(255,122,69,.28); z-index:-1; border-radius:6px;
+  }
+  /* 副标题 */
+  .sub{
+    position:absolute; top:790px; left:88px; right:88px;
+    font-size:50px; font-weight:600; color:#5a4a3c; line-height:1.5;
+  }
+  .sub b{ color:#2b2118; }
+  /* 雪球 emoji */
+  .snow{
+    position:absolute; right:70px; top:660px; font-size:150px;
+    transform:rotate(8deg);
+    filter:drop-shadow(0 12px 20px rgba(0,0,0,.12));
+  }
+  /* 底部信息条 */
+  .footer{
+    position:absolute; left:88px; right:88px; bottom:120px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .badge{
+    background:#2b2118; color:#fff; font-size:40px; font-weight:800;
+    padding:26px 42px; border-radius:24px; display:flex; align-items:center; gap:16px;
+  }
+  .badge .gift{ font-size:46px; }
+  .by{ font-size:34px; color:#7a6a5c; font-weight:600; text-align:right; line-height:1.4;}
+  /* 装饰圆点 */
+  .deco1{position:absolute; left:-90px; bottom:-90px; width:340px;height:340px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #ffb38a, #ff7a45); opacity:.28;}
+  .deco2{position:absolute; right:120px; top:120px; width:120px;height:120px;border-radius:50%;
+    border:10px solid rgba(255,122,69,.35);}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="deco1"></div>
+    <div class="deco2"></div>
+
+    <div class="kicker"><span class="dot"></span>Karpathy 同款方法 · AI 知识库</div>
+
+    <div class="snow">❄️</div>
+
+    <div class="headline">
+      <span class="strike">收藏 = 吃灰</span>
+      <h1>让 AI 帮你<br>养一个会<span class="hl">滚雪球</span><br>的知识库</h1>
+    </div>
+
+    <div class="sub">
+      不是上传文件临时问，<br>而是 <b>越用越聪明、自己长大</b>的第二大脑
+    </div>
+
+    <div class="footer">
+      <div class="badge"><span class="gift">🎁</span>附 3 段可复用 prompt</div>
+      <div class="by">Claude + Notion<br>实操落地</div>
+    </div>
+  </div>
+</body>
+</html>
