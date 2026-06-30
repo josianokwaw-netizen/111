@@ -9,7 +9,7 @@
   "benchmark_status": "pending",
   "benchmark_name": null,
   "benchmark_sample_count": 0,
-  "baseline_plays": null,
+  "baseline_plays": 1022,
   "calibration_samples": 0,
   "data_collection": "adapter",
   "pool_status": "none",
@@ -19,15 +19,23 @@
   "enabled_perf_adapters": ["xhs-explore"],
   "last_bump_at": null,
   "last_bump_self_audited": false,
-  "last_published_at": null,
-  "last_published_file": null,
+  "last_published_at": "2026-06-30T19:43:00+08:00",
+  "last_published_file": "predictions/2026-06-30_eb64df6c0def_养知识库.md",
   "last_retro_at": null,
   "last_trends_run_at": null,
   "last_trends_added_count": 0,
   "last_prediction_self_scored": false,
   "last_self_scored_at": null,
   "consecutive_directional_errors": [],
-  "pending_retros": [],
+  "pending_retros": [
+    {
+      "file": "predictions/2026-06-30_eb64df6c0def_养知识库.md",
+      "published_at": "2026-06-30T19:43:00+08:00",
+      "retro_due": "2026-07-03",
+      "note": "T+0 早期数据已记(1022浏览/51赞/12藏/+2粉)；正式复盘待 top评论 + T+3d 浏览",
+      "counts_as_blind_sample": false
+    }
+  ],
   "shoots": [],
   "in_progress_session": null,
   "initialized_at": "2026-06-30T19:18:47+08:00"
