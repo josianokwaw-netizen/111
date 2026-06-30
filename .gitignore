@@ -1,2 +1,11 @@
 __pycache__/
 *.pyc
+
+# ── cheat-on-content：凭证 / 登录态 / 本地缓存（绝不提交）──
+.auth/
+.auth-xhs/
+.auth-linkedin/
+.cheat-secrets.json
+.cheat-cache/
+.cheat-hooks/
+.debug/
