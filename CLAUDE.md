@@ -54,6 +54,39 @@ python write_log.py \
 | 源库 | `d748335c510182ea885201b572eddef4` |
 | 维基库 | `3cb8335c510183e5839681992705faaa` |
 | 日志库 | `36a8335c5101826296aa816dd77513f6` |
+| Skill 目录库 | `c27f84a719c847b4a99900127e11dcf1`（data_source `8f80fe9c-a613-4c48-b3f2-6281a3dfe85a`） |
+
+---
+
+## Skill 登记与路由（Skill Catalog）
+
+我帮你「记忆」skill：每上传一个 skill 就分类、安装、登记到 Notion「🧩 Skill 目录」库，
+并按 README/SKILL.md 把它路由到对应角色/任务。
+
+### 上传一个 skill 时，自动执行：
+
+1. **取内容** — 优先 codeload 整包下载（`https://codeload.github.com/<owner>/<repo>/tar.gz/refs/heads/<branch>`），
+   raw 单文件读取也可用；`github.com` git clone 受出口策略限制会 403，别走那条路。
+2. **判定是否真 skill** — 看是否有带 `name`/`description` frontmatter 的 `SKILL.md`：
+   - 有 → 真 skill，整包复制进 `.claude/commands/<repo-name>/`，状态 `已安装`。
+   - 仅运行时工具（如需 pip 安装 CLI、SKILL.md 藏在子目录）→ 状态 `仅登记`，不拖入 commands。
+   - 无 SKILL.md 的独立应用（如 Horizon）→ 状态 `应用·非Skill`，只登记不安装。
+3. **分类 + 角色路由** — 按 README 归入分类（内容转换 / 设计·视觉 / Agent能力·工具 / 研究·分析 /
+   写作·编辑 / 工程·开发 / 元技能·SkillOps / 应用·非Skill）并填「适配角色」。
+4. **登记 Notion** — 往 Skill 目录库新增一行（名称 / 分类 / 状态 / 来源仓库 / 触发场景 /
+   适配角色 / 安装路径 / README摘要 / 登记日期），用 `notion-create-pages`，
+   parent `data_source_id: 8f80fe9c-a613-4c48-b3f2-6281a3dfe85a`。
+5. **写日志** — 往日志库写一条 `--op 摄入`（详情写明登记/安装了哪个 skill）。
+
+### 收到「全局 prompt / 我要做某事」时：
+
+读 Skill 目录库的「触发场景」与「适配角色」，把匹配的 skill 主动挑出来用或建议给你，
+而不是等你手动 `/skill-name`。
+
+### 快捷指令
+
+- `登记这个 skill <repo-url>` → 执行上面 5 步。
+- `Skill 目录` / `我有哪些 skill` → 拉取 Skill 目录库列出来。
 
 ---
 
