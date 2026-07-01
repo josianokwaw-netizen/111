@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# 生成的自包含单文件(内联 three.js,仅供双击预览;正式版是 index.html + three.module.js)
+assets/site/index_standalone.html
