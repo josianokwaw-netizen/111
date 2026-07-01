@@ -203,6 +203,35 @@ const vw = () => vh() * camera.aspect;
 
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r);
   g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+
+// 真实头像:把图丢到 assets/site/avatar.(jpg|png|webp) 即自动加载;缺省用占位圆。
+const AVATAR_SOURCES = ['./avatar.jpg','./avatar.png','./avatar.jpeg','./avatar.webp'];
+let _badgeCtx=null, _badgeTexRef=null, _avatarGeo=null;
+
+function drawAvatarPlaceholder(g, ax, ay, ar) {
+  const ph=g.createRadialGradient(ax-30,ay-30,20,ax,ay,ar); ph.addColorStop(0,'#3a3026'); ph.addColorStop(1,'#161210');
+  g.fillStyle=ph; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.fill();
+  g.strokeStyle='rgba(200,97,58,0.5)'; g.lineWidth=4; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.stroke();
+  g.fillStyle='rgba(190,175,155,0.5)'; g.font='600 40px system-ui'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText('头像',ax,ay);
+}
+function drawAvatarImage(img) {
+  if (!_badgeCtx || !_avatarGeo) return;
+  const g=_badgeCtx, {ax,ay,ar}=_avatarGeo, size=ar*2;
+  g.save(); g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.clip();
+  const scale=Math.max(size/img.width, size/img.height);   // cover 裁剪
+  const w=img.width*scale, h=img.height*scale;
+  g.drawImage(img, ax-w/2, ay-h/2, w, h); g.restore();
+  g.strokeStyle='rgba(200,97,58,0.6)'; g.lineWidth=4; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.stroke();
+  if (_badgeTexRef) _badgeTexRef.needsUpdate=true;
+}
+function loadAvatar(i=0) {
+  if (i>=AVATAR_SOURCES.length) return;                    // 都没有→保持占位
+  const img=new Image();
+  img.onload=()=>drawAvatarImage(img);
+  img.onerror=()=>loadAvatar(i+1);
+  img.src=AVATAR_SOURCES[i];
+}
 function makeBadgeTexture() {
   const s=512, cw=s, ch=Math.round(s*1.4); const c=document.createElement('canvas');
   c.width=cw; c.height=ch; const g=c.getContext('2d');
@@ -211,17 +240,17 @@ function makeBadgeTexture() {
   g.lineWidth=3; g.strokeStyle='rgba(200,150,110,0.32)'; roundRect(g,6,6,cw-12,ch-12,36); g.stroke();
   g.fillStyle='#05040a'; roundRect(g,cw/2-46,26,92,20,10); g.fill();
   const ax=cw/2, ay=ch*0.34, ar=120;
-  const ph=g.createRadialGradient(ax-30,ay-30,20,ax,ay,ar); ph.addColorStop(0,'#3a3026'); ph.addColorStop(1,'#161210');
-  g.fillStyle=ph; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.fill();
-  g.strokeStyle='rgba(200,97,58,0.5)'; g.lineWidth=4; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.stroke();
-  g.fillStyle='rgba(190,175,155,0.5)'; g.font='600 40px system-ui'; g.textAlign='center'; g.textBaseline='middle';
-  g.fillText('头像',ax,ay);
-  g.fillStyle='#efe9d8'; g.font='700 62px system-ui'; g.fillText('TENIS',cw/2,ch*0.64);
+  drawAvatarPlaceholder(g, ax, ay, ar);
+  g.fillStyle='#efe9d8'; g.font='700 62px system-ui'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText('TENIS',cw/2,ch*0.64);
   g.fillStyle='#8b8578'; g.font='400 30px system-ui'; g.fillText('AI 工具 · 个人网站',cw/2,ch*0.72);
   g.strokeStyle='rgba(200,150,110,0.25)'; g.lineWidth=2; g.beginPath(); g.moveTo(cw*0.2,ch*0.79); g.lineTo(cw*0.8,ch*0.79); g.stroke();
   g.fillStyle='rgba(210,195,175,0.6)';
   for(let x=cw*0.22,i=0;x<cw*0.78;i++){const bw=(i%3===0)?6:(i%2===0)?3:2; g.fillRect(x,ch*0.85,bw,ch*0.06); x+=bw+4;}
-  const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; tex.colorSpace=THREE.SRGBColorSpace; return {tex,ratio:ch/cw};
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; tex.colorSpace=THREE.SRGBColorSpace;
+  _badgeCtx=g; _badgeTexRef=tex; _avatarGeo={ax,ay,ar};
+  loadAvatar();                                            // 异步尝试加载真实头像
+  return {tex,ratio:ch/cw};
 }
 const {tex:badgeTex, ratio:badgeRatio} = makeBadgeTexture();
 const CARD_W=2.4, CARD_H=CARD_W*badgeRatio;
