@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>TENIS — Hero v1</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg:#0d0f12; --bg2:#15181d; --cream:#f4efe3; --dim:#7d8590; --accent:#ff5a3c;
+    --card:#1b1f25;
+  }
+  html,body{background:#000;}
+  .stage{
+    width:1512px;height:982px;position:relative;overflow:hidden;color:var(--cream);
+    font-family:"PingFang SC","Helvetica Neue","Noto Sans SC",sans-serif;
+    background:
+      radial-gradient(900px 600px at 68% 42%, rgba(70,78,92,.35), transparent 62%),
+      radial-gradient(1200px 900px at 15% 120%, rgba(255,90,60,.10), transparent 60%),
+      linear-gradient(160deg,#0f1216 0%, #0b0d10 55%, #08090b 100%);
+  }
+  /* subtle grid + noise */
+  .grid{position:absolute;inset:0;opacity:.06;
+    background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);
+    background-size:64px 64px;}
+  .noise{position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  /* ghost display word */
+  .ghost{position:absolute;right:-40px;bottom:-90px;font-size:360px;font-weight:900;
+    letter-spacing:-8px;color:#fff;opacity:.028;line-height:.8;}
+
+  /* NAV */
+  .nav{position:absolute;top:52px;left:64px;right:64px;display:flex;align-items:center;justify-content:space-between;z-index:5;}
+  .logo{display:flex;align-items:baseline;gap:14px;}
+  .logo .mark{font-size:30px;font-weight:800;letter-spacing:2px;}
+  .logo .sub{font-size:15px;color:var(--dim);letter-spacing:3px;font-family:"SF Mono",ui-monospace,monospace;}
+  .menu{display:flex;align-items:center;gap:40px;font-size:16px;letter-spacing:1px;}
+  .menu a{color:var(--cream);text-decoration:none;opacity:.85;}
+  .menu .num{font-size:11px;color:var(--dim);vertical-align:super;margin-right:4px;font-family:ui-monospace,monospace;}
+  .cta{background:var(--cream);color:#0d0f12;padding:12px 24px;border-radius:6px;font-weight:800;font-size:15px;letter-spacing:1px;}
+
+  /* left chapter rail */
+  .rail{position:absolute;left:64px;top:280px;font-family:ui-monospace,monospace;font-size:12px;
+    color:var(--dim);letter-spacing:2px;line-height:2.4;}
+  .rail .on{color:var(--cream);}
+  .rail .dot{color:var(--accent);}
+
+  /* HERO copy */
+  .hero{position:absolute;left:64px;bottom:150px;max-width:820px;z-index:4;}
+  .kick{font-family:ui-monospace,monospace;font-size:13px;color:var(--dim);letter-spacing:3px;margin-bottom:26px;}
+  .kick b{color:var(--accent);}
+  h1{font-size:96px;line-height:1.04;font-weight:800;letter-spacing:-2px;}
+  h1 .cn{font-weight:800;}
+  h1 em{font-style:normal;color:var(--accent);}
+  .tag{display:inline-block;margin-top:10px;font-size:15px;color:#6b7280;font-family:ui-monospace,monospace;}
+
+  /* ID CARD + lanyard */
+  .cardwrap{position:absolute;right:210px;top:150px;width:330px;text-align:center;z-index:3;transform:rotate(3deg);}
+  .strap{width:44px;height:250px;margin:0 auto;
+    background:repeating-linear-gradient(180deg,#22262d 0 14px,#1a1d23 14px 28px);
+    border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(0,0,0,.4);position:relative;}
+  .strap::before{content:"TENIS · TENIS · TENIS";position:absolute;top:60px;left:50%;
+    transform:translateX(-50%) rotate(90deg);white-space:nowrap;
+    font-family:ui-monospace,monospace;font-size:11px;letter-spacing:4px;color:#565c66;}
+  .clip{width:70px;height:26px;margin:-6px auto 0;background:linear-gradient(180deg,#3a3f47,#23272e);border-radius:6px;
+    box-shadow:0 2px 6px rgba(0,0,0,.5);}
+  .card{width:330px;margin-top:-4px;background:linear-gradient(165deg,#20242b,#14171c);
+    border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:22px;text-align:left;
+    box-shadow:0 40px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);position:relative;}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}
+  .card .id{font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);letter-spacing:1px;}
+  .card .live{font-family:ui-monospace,monospace;font-size:10px;color:var(--accent);letter-spacing:1px;}
+  .card .avatar{width:100%;height:250px;border-radius:12px;object-fit:cover;filter:grayscale(.25) contrast(1.05);
+    border:1px solid rgba(255,255,255,.06);}
+  .card .name{font-size:30px;font-weight:800;letter-spacing:1px;margin-top:16px;}
+  .card .role{font-family:ui-monospace,monospace;font-size:12px;color:var(--dim);letter-spacing:2px;margin-top:4px;}
+  .card .bar{margin-top:16px;height:34px;
+    background:repeating-linear-gradient(90deg,#e9e4d6 0 2px,transparent 2px 4px,#e9e4d6 4px 5px,transparent 5px 9px);
+    opacity:.85;border-radius:2px;}
+  .card .foot{font-family:ui-monospace,monospace;font-size:10px;color:#565c66;letter-spacing:1px;margin-top:10px;display:flex;justify-content:space-between;}
+
+  /* scroll hint */
+  .scroll{position:absolute;left:64px;bottom:64px;font-family:ui-monospace,monospace;font-size:12px;color:var(--dim);letter-spacing:2px;display:flex;align-items:center;gap:12px;}
+  .scroll .line{width:46px;height:1px;background:var(--dim);position:relative;}
+  .scroll .line::after{content:"";position:absolute;left:0;top:0;width:14px;height:1px;background:var(--cream);}
+  .frame{position:absolute;right:64px;bottom:64px;font-family:ui-monospace,monospace;font-size:11px;color:#565c66;letter-spacing:2px;text-align:right;line-height:1.7;}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="grid"></div>
+    <div class="noise"></div>
+    <div class="ghost">TENIS</div>
+
+    <nav class="nav">
+      <div class="logo"><span class="mark">忒尼斯</span><span class="sub">TENIS · STUDIO</span></div>
+      <div class="menu">
+        <a><span class="num">01</span>about</a>
+        <a><span class="num">02</span>build</a>
+        <a><span class="num">03</span>write</a>
+        <a><span class="num">04</span>video</a>
+        <span class="cta">CONTACT</span>
+      </div>
+    </nav>
+
+    <div class="rail">
+      <div class="on"><span class="dot">●</span> HERO — 序章</div>
+      <div>○ ABOUT</div>
+      <div>○ BUILD</div>
+      <div>○ WRITE</div>
+      <div>○ VIDEO</div>
+      <div>○ CONTACT</div>
+    </div>
+
+    <div class="cardwrap">
+      <div class="strap"></div>
+      <div class="clip"></div>
+      <div class="card">
+        <div class="top"><span class="id">ID — TENIS·2026</span><span class="live">● LIVE</span></div>
+        <img class="avatar" src="avatar.png" alt="tenis">
+        <div class="name">TENIS</div>
+        <div class="role">AI BUILDER · 知识库匠人</div>
+        <div class="bar"></div>
+        <div class="foot"><span>@tenis</span><span>拖动我 · DRAG ME</span></div>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="kick">个人主页 · PERSONAL SITE <b>/ 序章 CHAPTER 00</b></div>
+      <h1><span class="cn">白天我造 <em>AI</em>，</span><br>夜里 AI 帮我造<em>自己</em>。</h1>
+      <div class="tag">// 占位文案，等你的一句话 IP 定位替换</div>
+    </div>
+
+    <div class="scroll"><span class="line"></span>SCROLL — 视频帧滚动叙事</div>
+    <div class="frame">FRAME 000 / 240<br>THREE.JS LANYARD · GSAP SCRUB</div>
+  </div>
+</body>
+</html>
