@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TENIS · 挂绳工牌打样</title>
+<style>
+  :root {
+    --graphite: #0b0c0e;
+    --graphite-2: #111318;
+    --ink: #e7e9ee;
+    --muted: #6d7480;
+    --accent: #4a90a4; /* 冷调青灰,不是暖橘 */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(120% 80% at 50% -10%, #191c22 0%, var(--graphite) 55%, #050506 100%);
+    color: var(--ink);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #scene { position: fixed; inset: 0; z-index: 1; }
+  #scene canvas { display: block; touch-action: none; cursor: grab; }
+  #scene canvas:active { cursor: grabbing; }
+
+  /* 左上角站点标记 */
+  .brand {
+    position: fixed; top: 34px; left: 40px; z-index: 3;
+    letter-spacing: .42em; font-size: 13px; font-weight: 600;
+    color: var(--ink); text-transform: uppercase;
+  }
+  .brand small { display:block; letter-spacing:.16em; font-size:10px; color:var(--muted); margin-top:6px; }
+
+  /* 右下角大标题排版 */
+  .headline {
+    position: fixed; right: 48px; bottom: 56px; z-index: 3;
+    text-align: right; pointer-events: none;
+  }
+  .headline h1 {
+    font-size: clamp(34px, 6vw, 76px);
+    line-height: 1.02; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .headline h1 .dim { color: var(--muted); }
+  .headline p {
+    margin-top: 18px; color: var(--muted);
+    font-size: clamp(12px, 1.3vw, 15px); letter-spacing: .04em;
+  }
+
+  .hint {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    z-index: 3; color: var(--muted); font-size: 12px; letter-spacing: .12em;
+    opacity: .0; animation: fadein .8s ease 1.2s forwards;
+  }
+  @keyframes fadein { to { opacity: .7; } }
+
+  .grain {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    opacity: .05; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+</style>
+</head>
+<body>
+  <div class="brand">TENIS<small>用 AI 造个人网站</small></div>
+  <div class="headline">
+    <h1>我用 AI 造<span class="dim">个人网站</span><br>也<span class="dim">教你</span>造</h1>
+    <p>抓住工牌，甩一甩 — Three.js · 挂绳物理打样 v1</p>
+  </div>
+  <div class="hint">拖动工牌 · DRAG THE BADGE</div>
+  <div class="grain"></div>
+  <div id="scene"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const mount = document.getElementById('scene');
+const W = () => window.innerWidth, H = () => window.innerHeight;
+
+// ---------- renderer / scene / camera ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(W(), H());
+mount.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, W() / H(), 0.1, 100);
+camera.position.set(0, 0, 12);
+
+// 冷调灯光
+scene.add(new THREE.AmbientLight(0x3a4048, 1.1));
+const key = new THREE.DirectionalLight(0xcfe4ee, 1.4);
+key.position.set(-3, 4, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0x4a90a4, 1.1);
+rim.position.set(4, -2, 3); scene.add(rim);
+
+// ---------- world units ----------
+// 把可见高度换算成世界坐标,让绳子从顶端垂下
+const vh = () => 2 * Math.tan((camera.fov * Math.PI/180)/2) * camera.position.z;
+const vw = () => vh() * camera.aspect;
+
+// ---------- 工牌卡面纹理 (canvas) ----------
+function makeBadgeTexture() {
+  const s = 512, cw = s, ch = Math.round(s * 1.4);
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d');
+  // 卡底
+  const grd = g.createLinearGradient(0, 0, 0, ch);
+  grd.addColorStop(0, '#1a1e24'); grd.addColorStop(1, '#0f1216');
+  g.fillStyle = grd; roundRect(g, 0, 0, cw, ch, 40); g.fill();
+  // 冷调描边
+  g.lineWidth = 3; g.strokeStyle = 'rgba(120,150,165,0.35)';
+  roundRect(g, 6, 6, cw-12, ch-12, 36); g.stroke();
+  // 顶部挂孔
+  g.fillStyle = '#05070a';
+  roundRect(g, cw/2 - 46, 26, 92, 20, 10); g.fill();
+  // 头像占位 (Itachi 暂用占位圆,正式换真图)
+  const ax = cw/2, ay = ch*0.34, ar = 120;
+  const ph = g.createRadialGradient(ax-30, ay-30, 20, ax, ay, ar);
+  ph.addColorStop(0, '#2b3540'); ph.addColorStop(1, '#141a20');
+  g.fillStyle = ph; g.beginPath(); g.arc(ax, ay, ar, 0, Math.PI*2); g.fill();
+  g.strokeStyle = 'rgba(74,144,164,0.5)'; g.lineWidth = 4;
+  g.beginPath(); g.arc(ax, ay, ar, 0, Math.PI*2); g.stroke();
+  g.fillStyle = 'rgba(160,180,195,0.5)';
+  g.font = '600 40px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('头像', ax, ay);
+  // 名字
+  g.fillStyle = '#e7e9ee'; g.textAlign = 'center';
+  g.font = '700 62px system-ui'; g.fillText('TENIS', cw/2, ch*0.64);
+  // 角色
+  g.fillStyle = '#6d7480'; g.font = '400 30px system-ui';
+  g.fillText('AI 工具 · 个人网站', cw/2, ch*0.72);
+  // 分隔线
+  g.strokeStyle = 'rgba(120,150,165,0.25)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(cw*0.2, ch*0.79); g.lineTo(cw*0.8, ch*0.79); g.stroke();
+  // 底部条码感
+  g.fillStyle = 'rgba(180,200,210,0.6)';
+  for (let x = cw*0.22, i=0; x < cw*0.78; i++) {
+    const bw = (i%3===0)?6:(i%2===0)?3:2; g.fillRect(x, ch*0.85, bw, ch*0.06); x += bw + 4;
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 8; tex.colorSpace = THREE.SRGBColorSpace;
+  return { tex, ratio: ch/cw };
+}
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r);
+  g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+
+const { tex: badgeTex, ratio: badgeRatio } = makeBadgeTexture();
+const CARD_W = 2.5, CARD_H = CARD_W * badgeRatio;
+const card = new THREE.Mesh(
+  new THREE.PlaneGeometry(CARD_W, CARD_H),
+  new THREE.MeshStandardMaterial({ map: badgeTex, roughness: .6, metalness: .1,
+    side: THREE.DoubleSide, transparent: true })
+);
+scene.add(card);
+// 顶部小挂扣
+const clip = new THREE.Mesh(
+  new THREE.TorusGeometry(0.12, 0.04, 12, 24),
+  new THREE.MeshStandardMaterial({ color: 0x8a97a2, roughness: .3, metalness: .8 })
+);
+scene.add(clip);
+
+// ---------- verlet 绳索 ----------
+const SEG = 16;
+let anchor = new THREE.Vector3(-vw()*0.24, vh()/2 - 0.3, 0); // 顶部锚点,偏左给右侧标题留位
+const restLen = (anchor.y - 0.8) / SEG;              // 每段静止长度(末点停在偏上,避免贴底)
+const pts = [];
+for (let i = 0; i <= SEG; i++) {
+  const p = new THREE.Vector3(anchor.x, anchor.y - restLen*i, 0);
+  pts.push({ pos: p.clone(), prev: p.clone() });
+}
+const GRAV = new THREE.Vector3(0, -0.011, 0);
+const DAMP = 0.98;
+
+function simulate(dragging, target) {
+  // verlet 积分
+  for (let i = 0; i <= SEG; i++) {
+    if (i === 0) continue;                 // 顶点固定在锚点
+    if (i === SEG && dragging) continue;    // 拖拽时末点跟随鼠标
+    const p = pts[i];
+    const vx = (p.pos.x - p.prev.x) * DAMP;
+    const vy = (p.pos.y - p.prev.y) * DAMP;
+    p.prev.copy(p.pos);
+    p.pos.x += vx + GRAV.x; p.pos.y += vy + GRAV.y;
+  }
+  pts[0].pos.copy(anchor);
+  if (dragging) { pts[SEG].pos.copy(target); pts[SEG].prev.copy(target); }
+  // 距离约束
+  for (let k = 0; k < 24; k++) {
+    for (let i = 0; i < SEG; i++) {
+      const a = pts[i].pos, b = pts[i+1].pos;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy) || 1e-6;
+      const diff = (d - restLen) / d * 0.5;
+      const ox = dx * diff, oy = dy * diff;
+      if (i !== 0)        { a.x += ox; a.y += oy; }
+      if (i+1 !== SEG || !dragging) { b.x -= ox; b.y -= oy; }
+    }
+    pts[0].pos.copy(anchor);
+    if (dragging) pts[SEG].pos.copy(target);
+  }
+}
+
+// 绳带 ribbon geometry (每帧重建)
+const bandWidth = 0.16;
+const bandGeo = new THREE.BufferGeometry();
+const bandPos = new Float32Array((SEG+1) * 2 * 3);
+bandGeo.setAttribute('position', new THREE.BufferAttribute(bandPos, 3));
+const bandIdx = [];
+for (let i = 0; i < SEG; i++) {
+  const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+  bandIdx.push(a, b, c, b, d, c);
+}
+bandGeo.setIndex(bandIdx);
+const band = new THREE.Mesh(bandGeo,
+  new THREE.MeshStandardMaterial({ color: 0x20262d, roughness: .9, metalness: .0,
+    side: THREE.DoubleSide }));
+scene.add(band);
+
+function updateBand() {
+  for (let i = 0; i <= SEG; i++) {
+    const p = pts[i].pos;
+    const pa = pts[Math.max(0,i-1)].pos, pb = pts[Math.min(SEG,i+1)].pos;
+    let dx = pb.x - pa.x, dy = pb.y - pa.y;
+    const len = Math.hypot(dx, dy) || 1e-6; dx/=len; dy/=len;
+    const nx = -dy * bandWidth, ny = dx * bandWidth; // 垂直方向
+    bandPos[i*6+0] = p.x + nx; bandPos[i*6+1] = p.y + ny; bandPos[i*6+2] = p.z;
+    bandPos[i*6+3] = p.x - nx; bandPos[i*6+4] = p.y - ny; bandPos[i*6+5] = p.z;
+  }
+  bandGeo.attributes.position.needsUpdate = true;
+  bandGeo.computeVertexNormals();
+}
+
+// ---------- 拖拽 ----------
+let dragging = false;
+const target = new THREE.Vector3();
+const ndc = new THREE.Vector2();
+function toWorld(e) {
+  ndc.x = (e.clientX / W()) * 2 - 1;
+  ndc.y = -(e.clientY / H()) * 2 + 1;
+  target.set(ndc.x * vw()/2, ndc.y * vh()/2, 0);
+  return target;
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  const t = toWorld(e);
+  if (t.distanceTo(card.position) < CARD_H*0.7) {
+    dragging = true; renderer.domElement.setPointerCapture(e.pointerId);
+  }
+});
+renderer.domElement.addEventListener('pointermove', (e) => { if (dragging) toWorld(e); });
+window.addEventListener('pointerup', () => { dragging = false; });
+
+// ---------- loop ----------
+function animate() {
+  requestAnimationFrame(animate);
+  simulate(dragging, target);
+  updateBand();
+  // 卡片挂在末点下方,并按末段方向倾斜
+  const end = pts[SEG].pos, prev = pts[SEG-1].pos;
+  const ang = Math.atan2(end.x - prev.x, -(end.y - prev.y)); // 相对竖直的偏角
+  card.position.set(
+    end.x + Math.sin(ang) * CARD_H*0.55,
+    end.y - Math.cos(ang) * CARD_H*0.55,
+    0);
+  card.rotation.z = -ang;
+  clip.position.set(end.x, end.y, 0.05);
+  clip.rotation.z = -ang;
+  renderer.render(scene, camera);
+}
+animate();
+
+// ---------- resize ----------
+addEventListener('resize', () => {
+  camera.aspect = W()/H(); camera.updateProjectionMatrix();
+  renderer.setSize(W(), H());
+  anchor.set(-vw()*0.24, vh()/2 - 0.3, 0);
+});
+</script>
+</body>
+</html>
