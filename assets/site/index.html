@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TENIS · Studio</title>
+<style>
+  :root {
+    --cream: #efe9d8;      /* 奶白大标题(参考王十三) */
+    --ink: #e7e9ee;
+    --muted: #8b8578;
+    --accent: #c8613a;     /* 暖橘点缀,埋在暗里 */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: auto; }
+  body {
+    background: #060606; color: var(--ink);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    height: 320vh;               /* 滚动距离:驱动 scrub */
+  }
+  /* 固定 Hero 舞台 */
+  #stage { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+  #bg     { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #scene  { position: absolute; inset: 0; z-index: 2; }
+  #scene canvas { display: block; touch-action: none; cursor: grab; }
+  #scene canvas:active { cursor: grabbing; }
+
+  /* 电影 letterbox 黑边 */
+  .bar { position: absolute; left: 0; right: 0; height: 7vh; background: #050505; z-index: 5; pointer-events: none; }
+  .bar.top { top: 0; } .bar.bot { bottom: 0; }
+
+  /* 顶栏 */
+  .topbar { position: absolute; top: calc(7vh + 22px); left: 44px; right: 44px; z-index: 6;
+    display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+  .logo { letter-spacing: .36em; font-size: 13px; font-weight: 700; }
+  .logo small { display: block; letter-spacing: .18em; font-size: 10px; color: var(--muted); margin-top: 5px; font-weight: 400; }
+  .nav { display: flex; gap: 26px; font-size: 11px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+
+  /* 章节计数器 右上 */
+  .chapter { position: absolute; top: calc(7vh + 60px); right: 46px; z-index: 6; text-align: right; pointer-events: none; }
+  .chapter .no { font-size: 46px; font-weight: 700; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+  .chapter .of { font-size: 10px; letter-spacing: .3em; color: var(--muted); margin-top: 2px; }
+
+  /* 左下 monospace 元信息 */
+  .meta { position: absolute; left: 46px; bottom: calc(7vh + 26px); z-index: 6; pointer-events: none;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 11px; line-height: 1.9;
+    letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+  .meta .dot { color: var(--accent); }
+
+  /* 大标题:三段随滚动切换 */
+  .lines { position: absolute; left: 46px; right: 46px; bottom: 22%; z-index: 6; pointer-events: none; }
+  .line { position: absolute; left: 0; right: 0; bottom: 0; opacity: 0; transform: translateY(14px);
+    transition: opacity .5s ease, transform .5s ease; color: var(--cream);
+    font-size: clamp(28px, 4.2vw, 54px); line-height: 1.08; font-weight: 700; letter-spacing: -0.01em; }
+  .line.show { opacity: 1; transform: none; }
+  .line .dim { color: rgba(239,233,216,.42); }
+  .line .sub { display:block; margin-top:14px; font-size: clamp(12px,1.2vw,15px); font-weight:400; color:var(--muted); letter-spacing:.03em; }
+
+  .hint { position: absolute; right: 46px; bottom: calc(7vh + 26px); z-index: 6;
+    color: var(--muted); font-size: 11px; letter-spacing: .22em; pointer-events: none;
+    opacity: 0; animation: fadein .8s ease 1s forwards; }
+  @keyframes fadein { to { opacity: .65; } }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="bg"></canvas>
+    <div id="scene"></div>
+
+    <div class="bar top"></div>
+    <div class="bar bot"></div>
+
+    <div class="topbar">
+      <div class="logo">TENIS<small>用 AI 造个人网站</small></div>
+      <div class="nav"><span>ABOUT</span><span>BUILD</span><span>WRITE</span><span>VIDEO</span><span>CONTACT</span></div>
+    </div>
+
+    <div class="chapter"><div class="no" id="chNo">01</div><div class="of">CHAPTER · 01 / 03</div></div>
+
+    <div class="meta">
+      <div><span class="dot">●</span> ACTIVE — STUDIO 01</div>
+      <div id="metaTag">HERO · 挂绳工牌</div>
+      <div>AI 工具 · 个人网站</div>
+    </div>
+
+    <div class="lines">
+      <div class="line" data-i="0">我用 AI 造<span class="dim">个人网站</span>，也<span class="dim">教你</span>造。
+        <span class="sub">抓住工牌，甩一甩 — 这一页是我的门牌</span></div>
+      <div class="line" data-i="1">白天，我写 AI Agent。<br>晚上，我让它替我造东西。<br><span class="dim">同一台机器，不同规则。</span>
+        <span class="sub">Engineering · 让软件替你干活的那种软件</span></div>
+      <div class="line" data-i="2">不追数据，开始追手感。
+        <span class="sub">TRANSLATE · 从代码到画布 — 半个工程师，半个破坏者</span></div>
+    </div>
+
+    <div class="hint">向下滚动 · SCROLL TO SCRUB</div>
+  </div>
+
+<script type="importmap">
+{ "imports": { "three": "./three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============ 滚动进度 (全局驱动) ============
+let scrollT = 0; // 0..1
+function computeScroll() {
+  const max = document.body.scrollHeight - window.innerHeight;
+  scrollT = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+}
+window.addEventListener('scroll', computeScroll, { passive: true });
+computeScroll();
+
+// ============ 背景层:程序化电影 scrub (占位,可换真实帧序列) ============
+// 把 paintFrame(t) 换成 drawImage(frames[idx]) 即可接入真实逐帧素材。
+const bg = document.getElementById('bg');
+const bx = bg.getContext('2d');
+let noise = null;
+function buildNoise() {
+  const n = document.createElement('canvas'); n.width = n.height = 220;
+  const c = n.getContext('2d'); const img = c.createImageData(220, 220);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 120 + Math.random() * 135;
+    img.data[i] = img.data[i+1] = img.data[i+2] = v; img.data[i+3] = 255;
+  }
+  c.putImageData(img, 0, 0); noise = n;
+}
+buildNoise();
+
+function paintFrame(t) {
+  const w = bg.width, h = bg.height;
+  // 基底
+  bx.fillStyle = '#070606'; bx.fillRect(0, 0, w, h);
+  // 相机横移:光源随 t 平移+缩放,模拟运镜
+  const pan = (t - 0.5) * w * 0.5;
+  const cx = w * 0.5 - pan, cy = h * 0.42;
+  // 暖调 ember 主光(车内红/琥珀,参考王十三)
+  let g = bx.createRadialGradient(cx, cy, 20, cx, cy, h * (0.95 + t*0.25));
+  g.addColorStop(0,  'rgba(150, 74, 42, 0.85)');
+  g.addColorStop(0.35,'rgba(96, 44, 30, 0.55)');
+  g.addColorStop(1,  'rgba(8, 6, 6, 0)');
+  bx.fillStyle = g; bx.fillRect(0, 0, w, h);
+  // 冷调窗光(左上斜射)
+  const lx = w * (0.22 + t*0.1), ly = h * 0.2;
+  let g2 = bx.createRadialGradient(lx, ly, 10, lx, ly, h*0.7);
+  g2.addColorStop(0, 'rgba(150,170,185,0.22)');
+  g2.addColorStop(1, 'rgba(150,170,185,0)');
+  bx.fillStyle = g2; bx.fillRect(0, 0, w, h);
+  // 暖点缀高光(随 t 划过)
+  const sx = w * (0.15 + t*0.8);
+  let g3 = bx.createRadialGradient(sx, h*0.6, 5, sx, h*0.6, h*0.4);
+  g3.addColorStop(0, 'rgba(200,97,58,0.18)'); g3.addColorStop(1,'rgba(200,97,58,0)');
+  bx.fillStyle = g3; bx.fillRect(0, 0, w, h);
+  // 暗角 vignette
+  let vg = bx.createRadialGradient(w/2, h/2, h*0.3, w/2, h/2, h*0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.82)');
+  bx.fillStyle = vg; bx.fillRect(0, 0, w, h);
+  // film grain
+  if (noise) {
+    bx.globalAlpha = 0.06; bx.globalCompositeOperation = 'overlay';
+    const off = (t * 400) % 220;
+    for (let y = -off; y < h; y += 220) for (let x = -off; x < w; x += 220) bx.drawImage(noise, x, y);
+    bx.globalAlpha = 1; bx.globalCompositeOperation = 'source-over';
+  }
+}
+function resizeBG() {
+  const dpr = Math.min(devicePixelRatio, 2);
+  bg.width = innerWidth * dpr; bg.height = innerHeight * dpr;
+}
+resizeBG();
+
+// ============ UI:随滚动切换章节/标题 ============
+const lines = [...document.querySelectorAll('.line')];
+const chNo = document.getElementById('chNo');
+const metaTag = document.getElementById('metaTag');
+const chapterOf = document.querySelector('.chapter .of');
+const tags = ['HERO · 挂绳工牌', 'ENGINEERING · AI AGENT', 'TRANSLATE · CODE→CANVAS'];
+function updateUI(t) {
+  const stage = t < 0.34 ? 0 : t < 0.67 ? 1 : 2;
+  lines.forEach((l, i) => l.classList.toggle('show', i === stage));
+  chNo.textContent = '0' + (stage + 1);
+  chapterOf.textContent = `CHAPTER · 0${stage+1} / 03`;
+  metaTag.textContent = tags[stage];
+}
+
+// ============ Three.js 挂绳工牌(压在背景上) ============
+const mount = document.getElementById('scene');
+const W = () => innerWidth, H = () => innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(W(), H());
+mount.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, W()/H(), 0.1, 100);
+camera.position.set(0, 0, 12);
+scene.add(new THREE.AmbientLight(0x40382f, 1.1));
+const key = new THREE.DirectionalLight(0xf0dcc4, 1.4); key.position.set(-3,4,6); scene.add(key);
+const rim = new THREE.DirectionalLight(0xc8613a, 1.0); rim.position.set(4,-2,3); scene.add(rim);
+
+const vh = () => 2 * Math.tan((camera.fov*Math.PI/180)/2) * camera.position.z;
+const vw = () => vh() * camera.aspect;
+
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r);
+  g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function makeBadgeTexture() {
+  const s=512, cw=s, ch=Math.round(s*1.4); const c=document.createElement('canvas');
+  c.width=cw; c.height=ch; const g=c.getContext('2d');
+  const grd=g.createLinearGradient(0,0,0,ch); grd.addColorStop(0,'#1a1712'); grd.addColorStop(1,'#0f0d0a');
+  g.fillStyle=grd; roundRect(g,0,0,cw,ch,40); g.fill();
+  g.lineWidth=3; g.strokeStyle='rgba(200,150,110,0.32)'; roundRect(g,6,6,cw-12,ch-12,36); g.stroke();
+  g.fillStyle='#05040a'; roundRect(g,cw/2-46,26,92,20,10); g.fill();
+  const ax=cw/2, ay=ch*0.34, ar=120;
+  const ph=g.createRadialGradient(ax-30,ay-30,20,ax,ay,ar); ph.addColorStop(0,'#3a3026'); ph.addColorStop(1,'#161210');
+  g.fillStyle=ph; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.fill();
+  g.strokeStyle='rgba(200,97,58,0.5)'; g.lineWidth=4; g.beginPath(); g.arc(ax,ay,ar,0,Math.PI*2); g.stroke();
+  g.fillStyle='rgba(190,175,155,0.5)'; g.font='600 40px system-ui'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText('头像',ax,ay);
+  g.fillStyle='#efe9d8'; g.font='700 62px system-ui'; g.fillText('TENIS',cw/2,ch*0.64);
+  g.fillStyle='#8b8578'; g.font='400 30px system-ui'; g.fillText('AI 工具 · 个人网站',cw/2,ch*0.72);
+  g.strokeStyle='rgba(200,150,110,0.25)'; g.lineWidth=2; g.beginPath(); g.moveTo(cw*0.2,ch*0.79); g.lineTo(cw*0.8,ch*0.79); g.stroke();
+  g.fillStyle='rgba(210,195,175,0.6)';
+  for(let x=cw*0.22,i=0;x<cw*0.78;i++){const bw=(i%3===0)?6:(i%2===0)?3:2; g.fillRect(x,ch*0.85,bw,ch*0.06); x+=bw+4;}
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; tex.colorSpace=THREE.SRGBColorSpace; return {tex,ratio:ch/cw};
+}
+const {tex:badgeTex, ratio:badgeRatio} = makeBadgeTexture();
+const CARD_W=2.4, CARD_H=CARD_W*badgeRatio;
+const card = new THREE.Mesh(new THREE.PlaneGeometry(CARD_W,CARD_H),
+  new THREE.MeshStandardMaterial({map:badgeTex, roughness:.6, metalness:.1, side:THREE.DoubleSide, transparent:true}));
+scene.add(card);
+const clip = new THREE.Mesh(new THREE.TorusGeometry(0.12,0.04,12,24),
+  new THREE.MeshStandardMaterial({color:0xa08b6e, roughness:.3, metalness:.8})); scene.add(clip);
+
+// verlet 绳索
+const SEG=16;
+const anchorBaseX = () => vw()*0.30;  // 偏右挂,参考王十三
+let anchor = new THREE.Vector3(anchorBaseX(), vh()/2-0.3, 0);
+const restLen = (anchor.y - 0.6)/SEG;
+const pts=[];
+for(let i=0;i<=SEG;i++){const p=new THREE.Vector3(anchor.x,anchor.y-restLen*i,0); pts.push({pos:p.clone(),prev:p.clone()});}
+const GRAV=new THREE.Vector3(0,-0.011,0), DAMP=0.98;
+function simulate(drag,tg){
+  for(let i=0;i<=SEG;i++){ if(i===0)continue; if(i===SEG&&drag)continue;
+    const p=pts[i]; const vx=(p.pos.x-p.prev.x)*DAMP, vy=(p.pos.y-p.prev.y)*DAMP;
+    p.prev.copy(p.pos); p.pos.x+=vx+GRAV.x; p.pos.y+=vy+GRAV.y; }
+  pts[0].pos.copy(anchor); if(drag){pts[SEG].pos.copy(tg); pts[SEG].prev.copy(tg);}
+  for(let k=0;k<24;k++){ for(let i=0;i<SEG;i++){
+      const a=pts[i].pos,b=pts[i+1].pos; const dx=b.x-a.x,dy=b.y-a.y; const d=Math.hypot(dx,dy)||1e-6;
+      const diff=(d-restLen)/d*0.5, ox=dx*diff, oy=dy*diff;
+      if(i!==0){a.x+=ox;a.y+=oy;} if(i+1!==SEG||!drag){b.x-=ox;b.y-=oy;} }
+    pts[0].pos.copy(anchor); if(drag)pts[SEG].pos.copy(tg); }
+}
+const bandW=0.15, bandGeo=new THREE.BufferGeometry();
+const bandPos=new Float32Array((SEG+1)*2*3);
+bandGeo.setAttribute('position', new THREE.BufferAttribute(bandPos,3));
+const bandIdx=[]; for(let i=0;i<SEG;i++){const a=i*2,b=i*2+1,c=(i+1)*2,d=(i+1)*2+1; bandIdx.push(a,b,c,b,d,c);}
+bandGeo.setIndex(bandIdx);
+const band=new THREE.Mesh(bandGeo, new THREE.MeshStandardMaterial({color:0x241d16, roughness:.9, side:THREE.DoubleSide}));
+scene.add(band);
+function updateBand(){
+  for(let i=0;i<=SEG;i++){ const p=pts[i].pos; const pa=pts[Math.max(0,i-1)].pos,pb=pts[Math.min(SEG,i+1)].pos;
+    let dx=pb.x-pa.x,dy=pb.y-pa.y; const len=Math.hypot(dx,dy)||1e-6; dx/=len;dy/=len;
+    const nx=-dy*bandW, ny=dx*bandW;
+    bandPos[i*6]=p.x+nx; bandPos[i*6+1]=p.y+ny; bandPos[i*6+2]=p.z;
+    bandPos[i*6+3]=p.x-nx; bandPos[i*6+4]=p.y-ny; bandPos[i*6+5]=p.z; }
+  bandGeo.attributes.position.needsUpdate=true; bandGeo.computeVertexNormals();
+}
+// 拖拽
+let dragging=false; const target=new THREE.Vector3(), ndc=new THREE.Vector2();
+function toWorld(e){ ndc.x=(e.clientX/W())*2-1; ndc.y=-(e.clientY/H())*2+1;
+  target.set(ndc.x*vw()/2, ndc.y*vh()/2, 0); return target; }
+renderer.domElement.addEventListener('pointerdown',e=>{ const t=toWorld(e);
+  if(t.distanceTo(card.position)<CARD_H*0.7){ dragging=true; renderer.domElement.setPointerCapture(e.pointerId);} });
+renderer.domElement.addEventListener('pointermove',e=>{ if(dragging)toWorld(e); });
+addEventListener('pointerup',()=>dragging=false);
+
+// ============ 主循环 ============
+function animate(){
+  requestAnimationFrame(animate);
+  // 背景 scrub + UI 跟随滚动
+  paintFrame(scrollT);
+  updateUI(scrollT);
+  // 工牌随滚动做轻微视差(锚点微移)
+  anchor.set(anchorBaseX(), vh()/2 - 0.3 - scrollT*0.6, 0);
+  simulate(dragging, target); updateBand();
+  const end=pts[SEG].pos, prev=pts[SEG-1].pos;
+  const ang=Math.atan2(end.x-prev.x, -(end.y-prev.y));
+  card.position.set(end.x+Math.sin(ang)*CARD_H*0.55, end.y-Math.cos(ang)*CARD_H*0.55, 0);
+  card.rotation.z=-ang; clip.position.set(end.x,end.y,0.05); clip.rotation.z=-ang;
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  camera.aspect=W()/H(); camera.updateProjectionMatrix(); renderer.setSize(W(),H());
+  resizeBG(); anchor.set(anchorBaseX(), vh()/2-0.3, 0);
+});
+</script>
+</body>
+</html>
