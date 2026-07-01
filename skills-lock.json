@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "skills": {
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/brainstorming/SKILL.md",
+      "computedHash": "253570c46990ea018dd4520dba80cd77c35f9e5a8654057da1812face7be30cd"
+    },
+    "ding": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/ding/SKILL.md",
+      "computedHash": "dee6746cfed819b7a74fe4f6b76dbf168d098c20ff5b1ef6c7ce44fe7f869882"
+    },
+    "dispatching-parallel-agents": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/dispatching-parallel-agents/SKILL.md",
+      "computedHash": "85df55d2235a7623b315dac4bc340c14a37dcdc57c869c80a829e1a53a174689"
+    },
+    "executing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/executing-plans/SKILL.md",
+      "computedHash": "08604f93f2e38dd3575e5503c79cda5c623c78a8df0e472457ac5ef7a33f22b8"
+    },
+    "finishing-a-development-branch": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/finishing-a-development-branch/SKILL.md",
+      "computedHash": "aa2632ed96df59c36348bd8f8ec1ff0fb0c5cc68b60691834687bf4cedc6be3f"
+    },
+    "mama": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/mama/SKILL.md",
+      "computedHash": "22963cd2d64247189255a6e67fede265b9962561709839cdbb39d215a4fd88e7"
+    },
+    "p10": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/p10/SKILL.md",
+      "computedHash": "167dd790ccc66d96b3a6d35eaa0725edc8702e911e9f5d7f94669a5fd38b5f6a"
+    },
+    "p7": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/p7/SKILL.md",
+      "computedHash": "6556226e548780efb5d614b83f44fa02be1cdf9b98930c44c0c88683c7c918d6"
+    },
+    "p9": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/p9/SKILL.md",
+      "computedHash": "ebe1582a068b2116b47132644a7c6973972dbf3fd4049eff4ebfe8734768619b"
+    },
+    "pro": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/pro/SKILL.md",
+      "computedHash": "c8a3e82fc3f6298dab25732748bdbc897b45ed375335f959c2bc1394368d11c6"
+    },
+    "pua": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/pua/SKILL.md",
+      "computedHash": "5155c2c07a3cbf25f29e6cb0953650183d8f2018b7d8a49ef38fd750905e5ba6"
+    },
+    "pua-en": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/pua-en/SKILL.md",
+      "computedHash": "95cae4036cd9c2498c9a3c0d5084b302ba844d772494ab12d099cd9c758ac61f"
+    },
+    "pua-ja": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/pua-ja/SKILL.md",
+      "computedHash": "1179e8a8c7c798070a6a90842fb6930c8b1f2610a73a7ea704ca593b0c7fe18e"
+    },
+    "pua-loop": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/pua-loop/SKILL.md",
+      "computedHash": "cd3d892bb98bdbe60560619cb0eb854d061d088913cec3117e71ddf9c475c2e7"
+    },
+    "pua-trae": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": ".trae/skills/pua-trae/SKILL.md",
+      "computedHash": "5ad16a97f9338ef6430eed984aedc6615bb7b3ea58efe6935273b4712c3b1f4c"
+    },
+    "receiving-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/receiving-code-review/SKILL.md",
+      "computedHash": "3f56080356c62e4f74a183d7371686babc661e41a952dc67a97c2c76fe8a9329"
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "computedHash": "cde520e9118d7e6b74b5ab0123cff2f68d9c07bddb3f82c997753b6126600aed"
+    },
+    "shot": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/shot/SKILL.md",
+      "computedHash": "d01c5aa0bca8c2f5b518e9b4945992a8a70bee9409d0c3abfdc359f7bd48e47c"
+    },
+    "subagent-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/subagent-driven-development/SKILL.md",
+      "computedHash": "aaeb6686111c76b3c38e09156fe18af44d73b324ee055e5cb0ab63dc776f216f"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "792a368e074981d7e3138edb439e138489b2ac247cd1e5739fab52af680fb17b"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "eee144aea35d783296d178017e9fe843c6d16cc8b240e106f5e50910f6caf329"
+    },
+    "using-git-worktrees": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/using-git-worktrees/SKILL.md",
+      "computedHash": "212ad917e5543e84ea3adf4e3fab537675db976fdab05d4de432870e38b49e80"
+    },
+    "using-superpowers": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/using-superpowers/SKILL.md",
+      "computedHash": "e94af48fd52e1c329952fae638bde84671997744901c780281aff6e6986b8f1d"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/verification-before-completion/SKILL.md",
+      "computedHash": "9b446f0c7fe1cfb560b1d34439523b1a76d5f177290007b2c053a1c749a4a8ba"
+    },
+    "web-access": {
+      "source": "eze-is/web-access",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "93fa53b87d8ac64d3923fc9d43c4f40664a931dbed140f24700f62570c28cce5"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "computedHash": "b73b59d43c34c3fc225bfae419c458bb216af80df25fc0c545dfa7fd2a161722"
+    },
+    "writing-skills": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/writing-skills/SKILL.md",
+      "computedHash": "985a2c1a4242d89bd44a0060cd0e2c81ebb3683e820026fa52ccd7213804ce03"
+    },
+    "yes": {
+      "source": "tanweai/pua",
+      "sourceType": "github",
+      "skillPath": "skills/yes/SKILL.md",
+      "computedHash": "6d6adf4faa841d7126592f7407b9e9eb9c700f5ae67a61129a5f892eb0926676"
+    }
+  }
+}
