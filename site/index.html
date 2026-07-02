@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TENIS — 我用 AI 造个人网站，也教你造</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --ink:#0E1116;          /* 石墨黑 */
+    --steel:#18202A;        /* 钢青黑 */
+    --fog:#8B98A8;          /* 雾灰蓝 */
+    --cold:#E9EDF1;         /* 冷白 */
+    --foam:#79B8AD;         /* 浪沫青（取自海岸浪沫） */
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --cn:"Noto Sans SC","PingFang SC",sans-serif;
+    --en:"Anton","Noto Sans SC",sans-serif;
+  }
+  html{scroll-behavior:smooth;}
+  body{background:var(--ink);color:var(--cold);font-family:var(--cn);overflow-x:hidden;}
+  a{color:inherit;text-decoration:none;}
+
+  /* ===== 背景：海岸线 duotone 压暗 ===== */
+  .bg{position:fixed;inset:0;z-index:0;}
+  .bg .photo{position:absolute;inset:0;background:url("coast.jpg") center 30%/cover no-repeat;
+    filter:grayscale(1) brightness(.52) contrast(1.15);}
+  .bg .tint{position:absolute;inset:0;background:linear-gradient(170deg,rgba(24,32,42,.42),rgba(14,17,22,.66));
+    mix-blend-mode:multiply;}
+  .bg .tone{position:absolute;inset:0;background:radial-gradient(1100px 700px at 70% 30%,rgba(121,184,173,.10),transparent 65%);}
+  .bg .vig{position:absolute;inset:0;background:radial-gradient(140% 100% at 50% 40%,transparent 45%,rgba(8,10,13,.9) 100%);}
+  .bg .noise{position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+  /* ===== 导航 ===== */
+  .nav{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+    padding:26px clamp(20px,4vw,64px);}
+  .logo{display:flex;align-items:baseline;gap:12px;}
+  .logo .mark{font-size:22px;font-weight:900;letter-spacing:2px;}
+  .logo .sub{font-family:var(--mono);font-size:11px;color:var(--fog);letter-spacing:3px;}
+  .menu{display:flex;align-items:center;gap:clamp(14px,2.6vw,38px);font-size:14px;letter-spacing:1px;}
+  .menu a{opacity:.85;transition:opacity .2s;}
+  .menu a:hover,.menu a:focus-visible{opacity:1;color:var(--foam);}
+  .menu .num{font-family:var(--mono);font-size:10px;color:var(--fog);vertical-align:super;margin-right:3px;}
+  .cta{background:var(--cold);color:var(--ink);padding:10px 20px;border-radius:4px;font-weight:900;font-size:13px;letter-spacing:1px;}
+  .cta:hover{background:var(--foam);}
+  @media (max-width:720px){.menu a{display:none;}.menu .cta{display:inline-block;}}
+
+  /* ===== Hero ===== */
+  .hero{position:relative;z-index:2;min-height:100svh;display:flex;flex-direction:column;justify-content:flex-end;
+    padding:0 clamp(20px,4vw,64px) clamp(84px,12vh,140px);overflow:clip;}
+  .ghost{position:absolute;right:-1vw;bottom:-6vh;font-family:var(--en);font-size:clamp(120px,24vw,360px);
+    color:#fff;opacity:.03;line-height:.8;letter-spacing:2px;pointer-events:none;user-select:none;}
+  .rail{position:absolute;left:clamp(20px,4vw,64px);top:32vh;font-family:var(--mono);font-size:11px;
+    color:var(--fog);letter-spacing:2px;line-height:2.5;}
+  .rail .on{color:var(--cold);}
+  .rail .dot{color:var(--foam);}
+  @media (max-width:900px){.rail{display:none;}}
+  .kick{font-family:var(--mono);font-size:12px;color:var(--fog);letter-spacing:3px;margin-bottom:22px;}
+  .kick b{color:var(--foam);font-weight:500;}
+  h1{font-size:clamp(38px,7.2vw,104px);line-height:1.08;font-weight:900;letter-spacing:-.02em;max-width:12em;}
+  h1 em{font-style:normal;color:var(--foam);}
+  .tag{margin-top:16px;font-family:var(--mono);font-size:clamp(11px,1.2vw,15px);color:var(--fog);letter-spacing:1px;max-width:34em;}
+  .loc{position:absolute;right:clamp(20px,4vw,64px);top:34vh;text-align:right;font-size:14px;color:var(--fog);line-height:1.9;}
+  @media (max-width:1100px){.loc{display:none;}}
+  .loc .hl{color:var(--cold);}
+
+  /* ===== 挂绳工牌（signature） ===== */
+  .lanyard{position:absolute;z-index:10;top:0;right:clamp(4vw,12vw,16vw);
+    transform-origin:top center;cursor:grab;touch-action:none;will-change:transform;}
+  .lanyard.grabbing{cursor:grabbing;}
+  .strap{width:40px;height:clamp(140px,24vh,240px);margin:0 auto;position:relative;
+    background:repeating-linear-gradient(180deg,#232a33 0 14px,#1a2028 14px 28px);
+    border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(0,0,0,.4);}
+  .strap::before{content:"TENIS · TENIS · TENIS";position:absolute;top:46%;left:50%;
+    transform:translate(-50%,-50%) rotate(90deg);white-space:nowrap;
+    font-family:var(--mono);font-size:10px;letter-spacing:4px;color:#5a6470;}
+  .clip{width:64px;height:24px;margin:-4px auto 0;background:linear-gradient(180deg,#3a424c,#232a33);
+    border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+  .card{width:clamp(240px,24vw,320px);margin-top:-3px;background:linear-gradient(165deg,#1E252E 0%,#12161C 100%);
+    border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;
+    box-shadow:0 40px 80px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.06);}
+  .card .top{display:flex;justify-content:space-between;margin-bottom:14px;font-family:var(--mono);}
+  .card .id{font-size:10px;color:var(--fog);letter-spacing:1px;}
+  .card .live{font-size:10px;color:var(--foam);letter-spacing:1px;}
+  .card .avatar{width:100%;aspect-ratio:1/.94;border-radius:10px;object-fit:cover;object-position:center 20%;
+    filter:grayscale(.3) contrast(1.05) brightness(.95);border:1px solid rgba(255,255,255,.06);display:block;}
+  .card .name{font-family:var(--en);font-size:28px;letter-spacing:2px;margin-top:14px;}
+  .card .role{font-family:var(--mono);font-size:11px;color:var(--fog);letter-spacing:2px;margin-top:4px;}
+  .card .bar{margin-top:14px;height:30px;border-radius:2px;opacity:.85;
+    background:repeating-linear-gradient(90deg,#dfe5ea 0 2px,transparent 2px 4px,#dfe5ea 4px 5px,transparent 5px 9px);}
+  .card .foot{font-family:var(--mono);font-size:9px;color:#5a6470;letter-spacing:1px;margin-top:9px;
+    display:flex;justify-content:space-between;}
+  @media (max-width:720px){
+    .lanyard{right:50%;transform:translateX(50%);}
+    .hero{padding-top:calc(20vh + 440px);padding-bottom:64px;}
+    .kick{letter-spacing:2px;}
+  }
+
+  /* ===== 底部状态行 ===== */
+  .status{position:fixed;z-index:15;left:clamp(20px,4vw,64px);bottom:28px;display:flex;align-items:center;gap:12px;
+    font-family:var(--mono);font-size:11px;color:var(--fog);letter-spacing:2px;}
+  .status .line{width:44px;height:1px;background:var(--fog);position:relative;overflow:hidden;}
+  .status .line i{position:absolute;left:0;top:0;width:14px;height:1px;background:var(--cold);animation:slide 2.4s infinite;}
+  @keyframes slide{0%{left:-14px}100%{left:44px}}
+  .frame{position:fixed;z-index:15;right:clamp(20px,4vw,64px);bottom:28px;text-align:right;
+    font-family:var(--mono);font-size:10px;color:#5a6470;letter-spacing:2px;line-height:1.8;}
+  .frame .n{color:var(--foam);}
+  @media (max-width:720px){.status{display:none;}.frame{display:none;}}
+
+  /* ===== 第二屏：章节预告 ===== */
+  .next{position:relative;z-index:2;background:linear-gradient(180deg,transparent,var(--ink) 18%);
+    padding:clamp(80px,14vh,160px) clamp(20px,4vw,64px) 120px;}
+  .next .head{font-family:var(--mono);font-size:12px;color:var(--fog);letter-spacing:3px;margin-bottom:40px;}
+  .next .head b{color:var(--foam);font-weight:500;}
+  .chapters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.07);}
+  .ch{background:var(--ink);padding:28px 24px 36px;opacity:0;transform:translateY(24px);}
+  .ch .no{font-family:var(--mono);font-size:11px;color:var(--fog);letter-spacing:2px;}
+  .ch h3{font-size:22px;font-weight:900;margin:14px 0 8px;}
+  .ch h3 span{font-family:var(--en);font-size:14px;color:var(--fog);letter-spacing:2px;margin-left:8px;}
+  .ch p{font-size:13px;color:var(--fog);line-height:1.8;}
+  .ch .soon{display:inline-block;margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--foam);
+    letter-spacing:2px;border:1px solid rgba(121,184,173,.35);padding:4px 10px;border-radius:3px;}
+  footer{position:relative;z-index:2;background:var(--ink);border-top:1px solid rgba(255,255,255,.07);
+    padding:32px clamp(20px,4vw,64px);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    font-family:var(--mono);font-size:11px;color:#5a6470;letter-spacing:2px;}
+
+  @media (prefers-reduced-motion:reduce){
+    .status .line i{animation:none;}
+    .ch{opacity:1;transform:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg" aria-hidden="true">
+  <div class="photo"></div>
+  <div class="tint"></div>
+  <div class="tone"></div>
+  <div class="vig"></div>
+  <div class="noise"></div>
+</div>
+
+<nav class="nav">
+  <div class="logo"><span class="mark">忒尼斯</span><span class="sub">TENIS · STUDIO</span></div>
+  <div class="menu">
+    <a href="#about"><span class="num">01</span>about</a>
+    <a href="#build"><span class="num">02</span>build</a>
+    <a href="#write"><span class="num">03</span>write</a>
+    <a href="#video"><span class="num">04</span>video</a>
+    <a class="cta" href="#contact">CONTACT</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="ghost">TENIS</div>
+
+  <div class="rail">
+    <div class="on"><span class="dot">●</span> HERO — 序章</div>
+    <div>○ ABOUT</div>
+    <div>○ BUILD</div>
+    <div>○ WRITE</div>
+    <div>○ VIDEO</div>
+    <div>○ CONTACT</div>
+  </div>
+
+  <div class="loc">
+    AI builder.<br>
+    <span class="hl">Site maker.</span><br>
+    A studio of one.
+  </div>
+
+  <div class="lanyard" id="lanyard">
+    <div class="strap"></div>
+    <div class="clip"></div>
+    <div class="card">
+      <div class="top"><span class="id">ID — TENIS·2026</span><span class="live">● LIVE</span></div>
+      <img class="avatar" src="avatar-itachi.jpg" alt="tenis avatar">
+      <div class="name">TENIS</div>
+      <div class="role">个人网站匠人 · AI BUILDER</div>
+      <div class="bar"></div>
+      <div class="foot"><span>@tenis</span><span>拖动我 · DRAG ME</span></div>
+    </div>
+  </div>
+
+  <div class="kick">个人网站 · PERSONAL SITE <b>/ 用 AI 造你的主页</b></div>
+  <h1>我用 <em>AI</em> 造个人网站，<br>也<em>教你</em>造。</h1>
+  <div class="tag">I BUILD PERSONAL SITES WITH AI — AND SHOW YOU HOW.</div>
+</header>
+
+<div class="status"><span class="line"><i></i></span>SCROLL — 视频帧滚动叙事</div>
+<div class="frame">FRAME <span class="n" id="frameNo">000</span> / 240<br>THREE.JS LANYARD · GSAP SCRUB</div>
+
+<section class="next" id="about">
+  <div class="head">NEXT — 章节预告 <b>/ 逐帧滚动版本施工中</b></div>
+  <div class="chapters">
+    <div class="ch"><div class="no">01 / ABOUT</div><h3>关于我<span>WHO</span></h3><p>一个用 AI 造东西的人。社媒账号、正在做的事，都在这。</p><a class="soon" href="#about">进行中</a></div>
+    <div class="ch" id="build"><div class="no">02 / BUILD</div><h3>造物<span>BUILD</span></h3><p>个人网站与小应用。每一个都附「怎么用 AI 造出来」的过程。</p><a class="soon" href="#build">进行中</a></div>
+    <div class="ch" id="write"><div class="no">03 / WRITE</div><h3>日常分享<span>WRITE</span></h3><p>小红书图文：AI 工具、知识管理、踩过的坑。</p><a class="soon" href="#write">进行中</a></div>
+    <div class="ch" id="video"><div class="no">04 / VIDEO</div><h3>视频<span>VIDEO</span></h3><p>正在筹备。第一支：用 AI 从零造出这个网站。</p><a class="soon" href="#video">COMING SOON</a></div>
+  </div>
+</section>
+
+<footer id="contact">
+  <span>© 2026 TENIS — BUILT WITH AI</span>
+  <span>CONTACT — 社媒账号整理中</span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script>
+(function(){
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- 工牌摆动：单摆 + 拖拽 ---- */
+  var el = document.getElementById('lanyard');
+  var theta = 0, omega = 0, dragging = false, lastA = 0, lastT = 0;
+  var centered = matchMedia('(max-width:720px)').matches;
+  function anchor(){
+    var r = el.getBoundingClientRect();
+    return {x: r.left + r.width/2, y: r.top};
+  }
+  function apply(){
+    var deg = theta * 180/Math.PI;
+    el.style.transform = (centered ? 'translateX(50%) ' : '') + 'rotate(' + deg.toFixed(3) + 'deg)';
+  }
+  function angleTo(x,y){
+    var a = anchor();
+    return Math.atan2(x - a.x, y - a.y) * -1;
+  }
+  el.addEventListener('pointerdown', function(e){
+    dragging = true; el.classList.add('grabbing');
+    el.setPointerCapture(e.pointerId);
+    lastA = angleTo(e.clientX, e.clientY); lastT = performance.now();
+  });
+  el.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    var a = angleTo(e.clientX, e.clientY), t = performance.now();
+    omega = (a - lastA) / Math.max(t - lastT, 1) * 16;
+    theta = Math.max(-0.6, Math.min(0.6, a));
+    lastA = a; lastT = t;
+  });
+  function release(){ dragging = false; el.classList.remove('grabbing'); }
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+
+  var t0 = performance.now();
+  (function tick(now){
+    if(!dragging){
+      var idle = reduced ? 0 : Math.sin((now - t0)/2400) * 0.035; // 待机轻摆
+      var k = 0.012, damp = 0.985;                                 // 弹簧回正
+      omega += (idle - theta) * k;
+      omega *= damp;
+      theta += omega;
+    }
+    apply();
+    requestAnimationFrame(tick);
+  })(t0);
+
+  /* ---- GSAP：帧计数 scrub + 章节浮现 ---- */
+  if (window.gsap && window.ScrollTrigger){
+    gsap.registerPlugin(ScrollTrigger);
+    var frameEl = document.getElementById('frameNo'), state = {f: 0};
+    gsap.to(state, {
+      f: 240, ease: 'none',
+      scrollTrigger: {trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.4},
+      onUpdate: function(){ frameEl.textContent = String(Math.round(state.f)).padStart(3, '0'); }
+    });
+    if(!reduced){
+      gsap.utils.toArray('.ch').forEach(function(ch, i){
+        gsap.to(ch, {opacity: 1, y: 0, duration: .7, delay: i * .08,
+          scrollTrigger: {trigger: ch, start: 'top 85%'}});
+      });
+    } else {
+      gsap.set('.ch', {opacity: 1, y: 0});
+    }
+  } else {
+    document.querySelectorAll('.ch').forEach(function(ch){ ch.style.opacity = 1; ch.style.transform = 'none'; });
+  }
+})();
+</script>
+</body>
+</html>
